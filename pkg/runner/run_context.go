@@ -26,22 +26,23 @@ const ActPath string = "/var/run/act"
 
 // RunContext contains info about current job
 type RunContext struct {
-	Name           string
-	Config         *Config
-	Matrix         map[string]interface{}
-	Run            *model.Run
-	EventJSON      string
-	Env            map[string]string
-	ExtraPath      []string
-	CurrentStep    string
-	StepResults    map[string]*model.StepResult
-	ExprEval       ExpressionEvaluator
-	JobContainer   container.Container
-	OutputMappings map[MappableOutput]MappableOutput
-	JobName        string
-	ActionPath     string
-	Parent         *RunContext
-	Masks          []string
+	Name              string
+	Config            *Config
+	Matrix            map[string]interface{}
+	Run               *model.Run
+	EventJSON         string
+	Env               map[string]string
+	ExtraPath         []string
+	CurrentStep       string
+	StepResults       map[string]*model.StepResult
+	ExprEval          ExpressionEvaluator
+	JobContainer      container.Container
+	ServiceContainers []container.Container
+	OutputMappings    map[MappableOutput]MappableOutput
+	JobName           string
+	ActionPath        string
+	Parent            *RunContext
+	Masks             []string
 }
 
 func (rc *RunContext) AddMask(mask string) {
@@ -149,6 +150,37 @@ func (rc *RunContext) startJobContainer() common.Executor {
 
 		binds, mounts := rc.GetBindsAndMounts()
 
+		// add service containers
+		for name, spec := range rc.Run.Job().Services {
+			mergedEnv := envList
+			for k, v := range spec.Env {
+				mergedEnv = append(mergedEnv, fmt.Sprintf("%s=%s", k, v))
+			}
+			serviceContainerName := createSimpleContainerName(rc.jobContainerName(), name)
+			c := container.NewContainer(&container.NewContainerInput{
+				Name:       serviceContainerName,
+				WorkingDir: rc.Config.Workdir,
+				Image:      spec.Image,
+				Username:   username,
+				Password:   password,
+				Env:        mergedEnv,
+				Mounts: map[string]string{
+					// TODO merge volumes
+					name:            filepath.Dir(rc.Config.Workdir),
+					"act-toolcache": "/toolcache",
+					"act-actions":   "/actions",
+				},
+				Binds:      binds,
+				Stdout:     logWriter,
+				Stderr:     logWriter,
+				Privileged: rc.Config.Privileged,
+				UsernsMode: rc.Config.UsernsMode,
+				Platform:   rc.Config.ContainerArchitecture,
+				AutoRemove: rc.Config.AutoRemove,
+			})
+			rc.ServiceContainers = append(rc.ServiceContainers, c)
+		}
+
 		rc.JobContainer = container.NewContainer(&container.NewContainerInput{
 			Cmd:         nil,
 			Entrypoint:  []string{"/bin/sleep", fmt.Sprint(rc.Config.ContainerMaxLifetime.Round(time.Second).Seconds())},
@@ -170,11 +202,18 @@ func (rc *RunContext) startJobContainer() common.Executor {
 			AutoRemove:  rc.Config.AutoRemove,
 		})
 
+		networkName := fmt.Sprintf("%s-network", rc.jobContainerName())
 		return common.NewPipelineExecutor(
+			rc.pullServicesImages(rc.Config.ForcePull),
 			rc.JobContainer.Pull(rc.Config.ForcePull),
+			rc.stopServiceContainers(),
 			rc.stopJobContainer(),
+			rc.removeNetwork(networkName),
+			rc.createNetwork(networkName),
+			rc.startServiceContainers(networkName),
 			rc.JobContainer.Create(rc.Config.ContainerCapAdd, rc.Config.ContainerCapDrop),
 			rc.JobContainer.Start(false),
+			rc.JobContainer.ConnectToNetwork(networkName),
 			rc.JobContainer.UpdateFromImageEnv(&rc.Env),
 			rc.JobContainer.UpdateFromEnv("/etc/environment", &rc.Env),
 			rc.JobContainer.Copy(ActPath+"/", &container.FileEntry{
@@ -194,6 +233,18 @@ func (rc *RunContext) startJobContainer() common.Executor {
 	}
 }
 
+func (rc *RunContext) createNetwork(name string) common.Executor {
+	return func(ctx context.Context) error {
+		return container.NewDockerNetworkCreateExecutor(name)(ctx)
+	}
+}
+
+func (rc *RunContext) removeNetwork(name string) common.Executor {
+	return func(ctx context.Context) error {
+		return container.NewDockerNetworkRemoveExecutor(name)(ctx)
+	}
+}
+
 func (rc *RunContext) execJobContainer(cmd []string, env map[string]string, user, workdir string) common.Executor {
 	return func(ctx context.Context) error {
 		return rc.JobContainer.Exec(cmd, env, user, workdir)(ctx)
@@ -209,6 +260,43 @@ func (rc *RunContext) stopJobContainer() common.Executor {
 				Then(container.NewDockerVolumeRemoveExecutor(rc.jobContainerName()+"-env", false))(ctx)
 		}
 		return nil
+	}
+}
+
+func (rc *RunContext) pullServicesImages(forcePull bool) common.Executor {
+	return func(ctx context.Context) error {
+		execs := []common.Executor{}
+		for _, c := range rc.ServiceContainers {
+			execs = append(execs, c.Pull(forcePull))
+		}
+		return common.NewParallelExecutor(len(execs), execs...)(ctx)
+	}
+}
+
+func (rc *RunContext) startServiceContainers(networkName string) common.Executor {
+	return func(ctx context.Context) error {
+		execs := []common.Executor{}
+		for _, c := range rc.ServiceContainers {
+			execs = append(execs, common.NewPipelineExecutor(
+				c.Pull(false),
+				c.Create(rc.Config.ContainerCapAdd, rc.Config.ContainerCapDrop),
+				c.Start(false),
+				c.ConnectToNetwork(networkName),
+				c.UpdateFromImageEnv(&rc.Env),
+				c.UpdateFromEnv("/etc/environment", &rc.Env),
+			))
+		}
+		return common.NewParallelExecutor(len(execs), execs...)(ctx)
+	}
+}
+
+func (rc *RunContext) stopServiceContainers() common.Executor {
+	return func(ctx context.Context) error {
+		execs := []common.Executor{}
+		for _, c := range rc.ServiceContainers {
+			execs = append(execs, c.Remove())
+		}
+		return common.NewParallelExecutor(len(execs), execs...)(ctx)
 	}
 }
 

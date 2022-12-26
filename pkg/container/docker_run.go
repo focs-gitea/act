@@ -71,6 +71,7 @@ type FileEntry struct {
 // Container for managing docker run containers
 type Container interface {
 	Create(capAdd []string, capDrop []string) common.Executor
+	ConnectToNetwork(name string) common.Executor
 	Copy(destPath string, files ...*FileEntry) common.Executor
 	CopyDir(destPath string, srcPath string, useGitIgnore bool) common.Executor
 	GetContainerArchive(ctx context.Context, srcPath string) (io.ReadCloser, error)
@@ -90,6 +91,23 @@ func NewContainer(input *NewContainerInput) Container {
 	cr := new(containerReference)
 	cr.input = input
 	return cr
+}
+
+func (cr *containerReference) ConnectToNetwork(name string) common.Executor {
+	return common.
+		NewDebugExecutor("%sdocker network connect %s %s", logPrefix, name, cr.input.Name).
+		Then(
+			common.NewPipelineExecutor(
+				cr.connect(),
+				cr.connectToNetwork(name),
+			).IfNot(common.Dryrun),
+		)
+}
+
+func (cr *containerReference) connectToNetwork(name string) common.Executor {
+	return func(ctx context.Context) error {
+		return cr.cli.NetworkConnect(ctx, name, cr.input.Name, nil)
+	}
 }
 
 // supportsContainerImagePlatform returns true if the underlying Docker server
