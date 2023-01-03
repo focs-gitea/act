@@ -147,6 +147,12 @@ func (runner *runnerImpl) NewPlanExecutor(plan *model.Plan) common.Executor {
 									defer cancel()
 								}
 
+								log.Infof("Cleaning up services for job %s", rc.JobName)
+
+								if err := rc.stopServiceContainers()(ctx); err != nil {
+									logger.Errorf("Error while cleaning services: %v", err)
+								}
+
 								log.Infof("Cleaning up container for job %s", rc.JobName)
 
 								if err := rc.stopJobContainer()(ctx); err != nil {
