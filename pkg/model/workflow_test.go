@@ -7,6 +7,88 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
+func TestReadWorkflow_ScheduleEvent(t *testing.T) {
+	yaml := `
+name: local-action-docker-url
+on:
+  schedule:
+    - cron: '30 5 * * 1,3'
+    - cron: '30 5 * * 2,4'
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: ./actions/docker-url
+`
+
+	workflow, err := ReadWorkflow(strings.NewReader(yaml))
+	assert.NoError(t, err, "read workflow should succeed")
+
+	schedules := workflow.OnEvent("schedule")
+	assert.Len(t, schedules, 2)
+
+	newSchedules := workflow.OnSchedule()
+	assert.Len(t, newSchedules, 2)
+
+	assert.Equal(t, "30 5 * * 1,3", newSchedules[0])
+	assert.Equal(t, "30 5 * * 2,4", newSchedules[1])
+
+	yaml = `
+name: local-action-docker-url
+on:
+  schedule:
+    test: '30 5 * * 1,3'
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: ./actions/docker-url
+`
+
+	workflow, err = ReadWorkflow(strings.NewReader(yaml))
+	assert.NoError(t, err, "read workflow should succeed")
+
+	newSchedules = workflow.OnSchedule()
+	assert.Len(t, newSchedules, 0)
+
+	yaml = `
+name: local-action-docker-url
+on:
+  schedule:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: ./actions/docker-url
+`
+
+	workflow, err = ReadWorkflow(strings.NewReader(yaml))
+	assert.NoError(t, err, "read workflow should succeed")
+
+	newSchedules = workflow.OnSchedule()
+	assert.Len(t, newSchedules, 0)
+
+	yaml = `
+name: local-action-docker-url
+on: [push, tag]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: ./actions/docker-url
+`
+
+	workflow, err = ReadWorkflow(strings.NewReader(yaml))
+	assert.NoError(t, err, "read workflow should succeed")
+
+	newSchedules = workflow.OnSchedule()
+	assert.Len(t, newSchedules, 0)
+}
+
 func TestReadWorkflow_StringEvent(t *testing.T) {
 	yaml := `
 name: local-action-docker-url
@@ -136,6 +218,31 @@ jobs:
 		"/data/my_data",
 		"/source/directory:/destination/directory",
 	})
+}
+
+func TestReadWorkflow_JobTypes(t *testing.T) {
+	yaml := `
+name: invalid job definition
+
+jobs:
+  default-job:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo
+  remote-reusable-workflow:
+    runs-on: ubuntu-latest
+    uses: remote/repo/.github/workflows/workflow.yml@main
+  local-reusable-workflow:
+    runs-on: ubuntu-latest
+    uses: ./.github/workflows/workflow.yml
+`
+
+	workflow, err := ReadWorkflow(strings.NewReader(yaml))
+	assert.NoError(t, err, "read workflow should succeed")
+	assert.Len(t, workflow.Jobs, 3)
+	assert.Equal(t, workflow.Jobs["default-job"].Type(), JobTypeDefault)
+	assert.Equal(t, workflow.Jobs["remote-reusable-workflow"].Type(), JobTypeReusableWorkflowRemote)
+	assert.Equal(t, workflow.Jobs["local-reusable-workflow"].Type(), JobTypeReusableWorkflowLocal)
 }
 
 func TestReadWorkflow_StepsTypes(t *testing.T) {

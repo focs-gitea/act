@@ -67,6 +67,30 @@ func (w *Workflow) OnEvent(event string) interface{} {
 	return nil
 }
 
+func (w *Workflow) OnSchedule() []string {
+	schedules := w.OnEvent("schedule")
+	if schedules == nil {
+		return []string{}
+	}
+
+	switch val := schedules.(type) {
+	case []interface{}:
+		allSchedules := []string{}
+		for _, v := range val {
+			for k, cron := range v.(map[string]interface{}) {
+				if k != "cron" {
+					continue
+				}
+				allSchedules = append(allSchedules, cron.(string))
+			}
+		}
+		return allSchedules
+	default:
+	}
+
+	return []string{}
+}
+
 type WorkflowDispatchInput struct {
 	Description string   `yaml:"description"`
 	Required    bool     `yaml:"required"`
@@ -380,6 +404,42 @@ func commonKeysMatch2(a map[string]interface{}, b map[string]interface{}, m map[
 	return true
 }
 
+// JobType describes what type of job we are about to run
+type JobType int
+
+const (
+	// StepTypeRun is all steps that have a `run` attribute
+	JobTypeDefault JobType = iota
+
+	// StepTypeReusableWorkflowLocal is all steps that have a `uses` that is a local workflow in the .github/workflows directory
+	JobTypeReusableWorkflowLocal
+
+	// JobTypeReusableWorkflowRemote is all steps that have a `uses` that references a workflow file in a github repo
+	JobTypeReusableWorkflowRemote
+)
+
+func (j JobType) String() string {
+	switch j {
+	case JobTypeDefault:
+		return "default"
+	case JobTypeReusableWorkflowLocal:
+		return "local-reusable-workflow"
+	case JobTypeReusableWorkflowRemote:
+		return "remote-reusable-workflow"
+	}
+	return "unknown"
+}
+
+// Type returns the type of the job
+func (j *Job) Type() JobType {
+	if strings.HasPrefix(j.Uses, "./.github/workflows") && (strings.HasSuffix(j.Uses, ".yml") || strings.HasSuffix(j.Uses, ".yaml")) {
+		return JobTypeReusableWorkflowLocal
+	} else if !strings.HasPrefix(j.Uses, "./") && strings.Contains(j.Uses, ".github/workflows") && (strings.Contains(j.Uses, ".yml@") || strings.Contains(j.Uses, ".yaml@")) {
+		return JobTypeReusableWorkflowRemote
+	}
+	return JobTypeDefault
+}
+
 // ContainerSpec is the specification of the container to use for the job
 type ContainerSpec struct {
 	Image       string            `yaml:"image"`
@@ -451,7 +511,7 @@ func (s *Step) GetEnv() map[string]string {
 func (s *Step) ShellCommand() string {
 	shellCommand := ""
 
-	//Reference: https://github.com/actions/runner/blob/8109c962f09d9acc473d92c595ff43afceddb347/src/Runner.Worker/Handlers/ScriptHandlerHelpers.cs#L9-L17
+	// Reference: https://github.com/actions/runner/blob/8109c962f09d9acc473d92c595ff43afceddb347/src/Runner.Worker/Handlers/ScriptHandlerHelpers.cs#L9-L17
 	switch s.Shell {
 	case "", "bash":
 		shellCommand = "bash --noprofile --norc -e -o pipefail {0}"
@@ -460,7 +520,7 @@ func (s *Step) ShellCommand() string {
 	case "python":
 		shellCommand = "python {0}"
 	case "sh":
-		shellCommand = "sh -e -c {0}"
+		shellCommand = "sh -e {0}"
 	case "cmd":
 		shellCommand = "%ComSpec% /D /E:ON /V:OFF /S /C \"CALL \"{0}\"\""
 	case "powershell":
@@ -487,6 +547,12 @@ const (
 	// StepTypeUsesActionRemote is all steps that have a `uses` that is a reference to a github repo
 	StepTypeUsesActionRemote
 
+	// StepTypeReusableWorkflowLocal is all steps that have a `uses` that is a local workflow in the .github/workflows directory
+	StepTypeReusableWorkflowLocal
+
+	// StepTypeReusableWorkflowRemote is all steps that have a `uses` that references a workflow file in a github repo
+	StepTypeReusableWorkflowRemote
+
 	// StepTypeInvalid is for steps that have invalid step action
 	StepTypeInvalid
 )
@@ -503,6 +569,10 @@ func (s StepType) String() string {
 		return "remote-action"
 	case StepTypeUsesDockerURL:
 		return "docker"
+	case StepTypeReusableWorkflowLocal:
+		return "local-reusable-workflow"
+	case StepTypeReusableWorkflowRemote:
+		return "remote-reusable-workflow"
 	}
 	return "unknown"
 }
@@ -520,6 +590,10 @@ func (s *Step) Type() StepType {
 		return StepTypeRun
 	} else if strings.HasPrefix(s.Uses, "docker://") {
 		return StepTypeUsesDockerURL
+	} else if strings.HasPrefix(s.Uses, "./.github/workflows") && (strings.HasSuffix(s.Uses, ".yml") || strings.HasSuffix(s.Uses, ".yaml")) {
+		return StepTypeReusableWorkflowLocal
+	} else if !strings.HasPrefix(s.Uses, "./") && strings.Contains(s.Uses, ".github/workflows") && (strings.Contains(s.Uses, ".yml@") || strings.Contains(s.Uses, ".yaml@")) {
+		return StepTypeReusableWorkflowRemote
 	} else if strings.HasPrefix(s.Uses, "./") {
 		return StepTypeUsesActionLocal
 	}
