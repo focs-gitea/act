@@ -41,6 +41,12 @@ func (e *HostEnvironment) Create(capAdd []string, capDrop []string) common.Execu
 	}
 }
 
+func (e *HostEnvironment) ConnectToNetwork(name string) common.Executor {
+	return func(ctx context.Context) error {
+		return nil
+	}
+}
+
 func (e *HostEnvironment) Close() common.Executor {
 	return func(ctx context.Context) error {
 		return nil
