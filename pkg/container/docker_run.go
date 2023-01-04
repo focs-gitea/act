@@ -15,6 +15,8 @@ import (
 	"strconv"
 	"strings"
 
+	networktypes "github.com/docker/docker/api/types/network"
+
 	"github.com/go-git/go-billy/v5/helper/polyfill"
 	"github.com/go-git/go-billy/v5/osfs"
 	"github.com/go-git/go-git/v5/plumbing/format/gitignore"
@@ -58,7 +60,8 @@ type NewContainerInput struct {
 	Platform    string
 	Options     string
 
-	AutoRemove bool
+	AutoRemove     bool
+	NetworkAliases []string
 }
 
 // FileEntry is a file to copy to a container
@@ -99,14 +102,16 @@ func (cr *containerReference) ConnectToNetwork(name string) common.Executor {
 		Then(
 			common.NewPipelineExecutor(
 				cr.connect(),
-				cr.connectToNetwork(name),
+				cr.connectToNetwork(name, cr.input.NetworkAliases),
 			).IfNot(common.Dryrun),
 		)
 }
 
-func (cr *containerReference) connectToNetwork(name string) common.Executor {
+func (cr *containerReference) connectToNetwork(name string, aliases []string) common.Executor {
 	return func(ctx context.Context) error {
-		return cr.cli.NetworkConnect(ctx, name, cr.input.Name, nil)
+		return cr.cli.NetworkConnect(ctx, name, cr.input.Name, &networktypes.EndpointSettings{
+			Aliases: aliases,
+		})
 	}
 }
 

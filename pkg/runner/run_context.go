@@ -251,13 +251,14 @@ func (rc *RunContext) startJobContainer() common.Executor {
 					"act-toolcache": "/toolcache",
 					"act-actions":   "/actions",
 				},
-				Binds:      binds,
-				Stdout:     logWriter,
-				Stderr:     logWriter,
-				Privileged: rc.Config.Privileged,
-				UsernsMode: rc.Config.UsernsMode,
-				Platform:   rc.Config.ContainerArchitecture,
-				AutoRemove: rc.Config.AutoRemove,
+				Binds:          binds,
+				Stdout:         logWriter,
+				Stderr:         logWriter,
+				Privileged:     rc.Config.Privileged,
+				UsernsMode:     rc.Config.UsernsMode,
+				Platform:       rc.Config.ContainerArchitecture,
+				AutoRemove:     rc.Config.AutoRemove,
+				NetworkAliases: []string{name},
 			})
 			rc.ServiceContainers = append(rc.ServiceContainers, c)
 		}
