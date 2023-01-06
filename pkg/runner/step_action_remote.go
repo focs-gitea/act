@@ -67,7 +67,7 @@ func (sar *stepActionRemote) prepareActionExecutor() common.Executor {
 			Token: "", /*
 				Shouldn't provide token when cloning actions,
 				the token comes from the instance which triggered the task,
-				it might be not the instance which provides actions.
+				however, it might be not the same instance which provides actions.
 				For GitHub, they are the same, always github.com.
 				But for Gitea, tasks triggered by a.com can clone actions from b.com.
 			*/
