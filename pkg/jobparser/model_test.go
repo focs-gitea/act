@@ -159,6 +159,17 @@ func TestParseRawOn(t *testing.T) {
 				},
 			},
 		},
+		{
+			input: "on: [pull_request, workflow_dispatch]",
+			result: []*Event{
+				{
+					Name: "pull_request",
+				},
+				{
+					Name: "workflow_dispatch",
+				},
+			},
+		},
 	}
 	for _, kase := range kases {
 		t.Run(kase.input, func(t *testing.T) {
