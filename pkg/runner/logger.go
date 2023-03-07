@@ -84,7 +84,11 @@ func WithJobLogger(ctx context.Context, jobID string, jobName string, config *Co
 	}
 	logger.SetFormatter(formatter)
 	logger.SetOutput(os.Stdout)
-	logger.SetLevel(logrus.GetLevel())
+	if config.JobLoggerLevel != nil {
+		logger.SetLevel(*config.JobLoggerLevel)
+	} else {
+		logger.SetLevel(logrus.TraceLevel)
+	}
 	rtn := logger.WithFields(logrus.Fields{
 		"job":    jobName,
 		"jobID":  jobID,
