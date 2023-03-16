@@ -13,14 +13,14 @@ Branches:
 
 Tags:
 
-- `vX.YZ.*`: based on `nektos/vX.Y.Z`, contains custom changes.
 - `nektos/vX.Y.Z`: mirror for `vX.Y.Z` of [nektos/act](https://github.com/nektos/act/).
+- `vX.YZ.*`: based on `nektos/vX.Y.Z`, contains custom changes.
+  - Examples:
+    - `nektos/v0.2.23` -> `v0.223.*`
+    - `nektos/v0.3.1` -> `v0.301.*`, not ~~`v0.31.*`~~
+    - `nektos/v0.10.1` -> `v0.1001.*`, not ~~`v0.101.*`~~
+    - `nektos/v0.3.100` -> not ~~`v0.3100.*`~~, I don't think it's really going to happen, if it does, we can find a way to handle it.
 
-Like:
-- `nektos/v0.2.23` -> `v0.223.*`
-- `nektos/v0.3.1` -> `v0.301.*`, not ~~`v0.31.*`~~
-- `nektos/v0.10.1` -> `v0.1001.*`, not ~~`v0.101.*`~~
-- `nektos/v0.3.100` -> not ~~`v0.3100.*`~~, I don't think it's really going to happen, if it does, we can find a way to handle it.
 ---
 
 ![act-logo](https://github.com/nektos/act/wiki/img/logo-150.png)
