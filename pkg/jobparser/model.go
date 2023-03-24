@@ -199,7 +199,10 @@ func ParseRawOn(rawOn *yaml.Node) ([]*Event, error) {
 					case []interface{}:
 						acts[act] = make([]string, len(b))
 						for i, v := range b {
-							acts[act][i] = v.(string)
+							var ok bool
+							if acts[act][i], ok = v.(string); !ok {
+								return nil, fmt.Errorf("unknown on type: %#v", branches)
+							}
 						}
 					default:
 						return nil, fmt.Errorf("unknown on type: %#v", branches)
@@ -221,7 +224,10 @@ func ParseRawOn(rawOn *yaml.Node) ([]*Event, error) {
 					}
 					schedules[i] = make(map[string]string, len(vv))
 					for k, vvv := range vv {
-						schedules[i][k] = vvv.(string)
+						var ok bool
+						if schedules[i][k], ok = vvv.(string); !ok {
+							return nil, fmt.Errorf("unknown on type: %#v", v)
+						}
 					}
 				}
 				res = append(res, &Event{
