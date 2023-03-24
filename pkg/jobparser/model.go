@@ -125,8 +125,21 @@ type RunDefaults struct {
 }
 
 type Event struct {
-	Name string
-	Acts map[string][]string
+	Name      string
+	acts      map[string][]string
+	schedules []map[string]string
+}
+
+func (evt *Event) IsSchedule() bool {
+	return evt.schedules != nil
+}
+
+func (evt *Event) Acts() map[string][]string {
+	return evt.acts
+}
+
+func (evt *Event) Schedules() []map[string]string {
+	return evt.schedules
 }
 
 func ParseRawOn(rawOn *yaml.Node) ([]*Event, error) {
@@ -168,12 +181,12 @@ func ParseRawOn(rawOn *yaml.Node) ([]*Event, error) {
 			case string:
 				res = append(res, &Event{
 					Name: k,
-					Acts: map[string][]string{},
+					acts: map[string][]string{},
 				})
 			case []string:
 				res = append(res, &Event{
 					Name: k,
-					Acts: map[string][]string{},
+					acts: map[string][]string{},
 				})
 			case map[string]interface{}:
 				acts := make(map[string][]string, len(t))
@@ -194,7 +207,26 @@ func ParseRawOn(rawOn *yaml.Node) ([]*Event, error) {
 				}
 				res = append(res, &Event{
 					Name: k,
-					Acts: acts,
+					acts: acts,
+				})
+			case []interface{}:
+				if k != "schedule" {
+					return nil, fmt.Errorf("unknown on type: %#v", v)
+				}
+				schedules := make([]map[string]string, len(t))
+				for i, tt := range t {
+					vv, ok := tt.(map[string]interface{})
+					if !ok {
+						return nil, fmt.Errorf("unknown on type: %#v", v)
+					}
+					schedules[i] = make(map[string]string, len(vv))
+					for k, vvv := range vv {
+						schedules[i][k] = vvv.(string)
+					}
+				}
+				res = append(res, &Event{
+					Name:      k,
+					schedules: schedules,
 				})
 			default:
 				return nil, fmt.Errorf("unknown on type: %#v", v)
