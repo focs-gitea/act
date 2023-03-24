@@ -164,6 +164,13 @@ func ParseRawOn(rawOn *yaml.Node) ([]*Event, error) {
 		}
 		res := make([]*Event, 0, len(val))
 		for k, v := range val {
+			if v == nil {
+				res = append(res, &Event{
+					Name: k,
+					Acts: map[string][]string{},
+				})
+				continue
+			}
 			switch t := v.(type) {
 			case string:
 				res = append(res, &Event{
@@ -196,6 +203,11 @@ func ParseRawOn(rawOn *yaml.Node) ([]*Event, error) {
 					Name: k,
 					Acts: acts,
 				})
+			case []interface{}:
+				// FIXME: The type of the value will be []interface{} and need to be parsed if the trigger event is schedule.
+				// Since Gitea doesn't support schedule event at present, this case will be skipped.
+				// See: https://docs.github.com/en/actions/using-workflows/events-that-trigger-workflows#schedule
+				continue
 			default:
 				return nil, fmt.Errorf("unknown on type: %#v", v)
 			}
