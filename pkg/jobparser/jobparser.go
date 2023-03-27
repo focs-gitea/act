@@ -36,7 +36,12 @@ func Parse(content []byte, options ...ParseOption) ([]*SingleWorkflow, error) {
 	}
 
 	var ret []*SingleWorkflow
-	for id, job := range workflow.Jobs {
+	ids, jobs, err := workflow.jobs()
+	if err != nil {
+		return nil, fmt.Errorf("invalid jobs: %w", err)
+	}
+	for i, id := range ids {
+		job := jobs[i]
 		for _, matrix := range getMatrixes(origin.GetJob(id)) {
 			job := job.Clone()
 			if job.Name == "" {
@@ -51,16 +56,18 @@ func Parse(content []byte, options ...ParseOption) ([]*SingleWorkflow, error) {
 			}
 			job.RawRunsOn = encodeRunsOn(runsOn)
 			job.EraseNeeds() // there will be only one job in SingleWorkflow, it cannot have needs
-			ret = append(ret, &SingleWorkflow{
+			swf := &SingleWorkflow{
 				Name:     workflow.Name,
 				RawOn:    workflow.RawOn,
 				Env:      workflow.Env,
-				Jobs:     map[string]*Job{id: job},
 				Defaults: workflow.Defaults,
-			})
+			}
+			if err := swf.setJob(id, job); err != nil {
+				return nil, fmt.Errorf("setJob: %w", err)
+			}
+			ret = append(ret, swf)
 		}
 	}
-	sortWorkflows(ret)
 	return ret, nil
 }
 
@@ -134,20 +141,4 @@ func matrixName(m map[string]interface{}) string {
 	}
 
 	return fmt.Sprintf("(%s)", strings.Join(vs, ", "))
-}
-
-func sortWorkflows(wfs []*SingleWorkflow) {
-	sort.Slice(wfs, func(i, j int) bool {
-		ki := ""
-		for k := range wfs[i].Jobs {
-			ki = k
-			break
-		}
-		kj := ""
-		for k := range wfs[j].Jobs {
-			kj = k
-			break
-		}
-		return ki < kj
-	})
 }
