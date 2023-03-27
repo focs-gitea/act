@@ -1,5 +1,9 @@
 name: test
 jobs:
+  zzz:
+    runs-on: linux
+    steps:
+      - run: echo zzz
   job1:
     runs-on: linux
     steps:
