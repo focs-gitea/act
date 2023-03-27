@@ -55,7 +55,6 @@ func Parse(content []byte, options ...ParseOption) ([]*SingleWorkflow, error) {
 				runsOn[i] = evaluator.Interpolate(v)
 			}
 			job.RawRunsOn = encodeRunsOn(runsOn)
-			job.EraseNeeds() // there will be only one job in SingleWorkflow, it cannot have needs
 			swf := &SingleWorkflow{
 				Name:     workflow.Name,
 				RawOn:    workflow.RawOn,
