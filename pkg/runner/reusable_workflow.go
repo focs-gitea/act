@@ -8,6 +8,7 @@ import (
 	"os"
 	"path"
 	"regexp"
+	"strings"
 	"sync"
 
 	"github.com/nektos/act/pkg/common"
@@ -16,7 +17,20 @@ import (
 )
 
 func newLocalReusableWorkflowExecutor(rc *RunContext) common.Executor {
-	return newReusableWorkflowExecutor(rc, rc.Config.Workdir, rc.Run.Job().Uses)
+	trimmedUses := strings.TrimPrefix(rc.Run.Job().Uses, "./")
+	uses := fmt.Sprintf("%s/%s@%s", rc.Config.PresetGitHubContext.Repository, trimmedUses, rc.Config.PresetGitHubContext.Sha)
+	workflowDir := fmt.Sprintf("%s/%s", rc.ActionCacheDir(), safeFilename(uses))
+
+	remoteReusableWorkflow := newRemoteReusableWorkflow(uses)
+	if remoteReusableWorkflow == nil {
+		return common.NewErrorExecutor(fmt.Errorf("expected format {owner}/{repo}/.gitea/workflows/{filename}@{ref}. Actual '%s' Input string was not in a correct format", uses))
+	}
+	remoteReusableWorkflow.URL = rc.Config.GitHubInstance
+
+	return common.NewPipelineExecutor(
+		newMutexExecutor(cloneIfRequired(rc, *remoteReusableWorkflow, workflowDir)),
+		newReusableWorkflowExecutor(rc, workflowDir, fmt.Sprintf("./.gitea/workflows/%s", remoteReusableWorkflow.Filename)),
+	)
 }
 
 func newRemoteReusableWorkflowExecutor(rc *RunContext) common.Executor {
@@ -108,13 +122,13 @@ type remoteReusableWorkflow struct {
 }
 
 func (r *remoteReusableWorkflow) CloneURL() string {
-	return fmt.Sprintf("https://%s/%s/%s", r.URL, r.Org, r.Repo)
+	return fmt.Sprintf("%s/%s/%s", r.URL, r.Org, r.Repo)
 }
 
 func newRemoteReusableWorkflow(uses string) *remoteReusableWorkflow {
 	// GitHub docs:
 	// https://docs.github.com/en/actions/using-workflows/workflow-syntax-for-github-actions#jobsjob_iduses
-	r := regexp.MustCompile(`^([^/]+)/([^/]+)/.github/workflows/([^@]+)@(.*)$`)
+	r := regexp.MustCompile(`^([^/]+)/([^/]+)/.gitea/workflows/([^@]+)@(.*)$`)
 	matches := r.FindStringSubmatch(uses)
 	if len(matches) != 5 {
 		return nil
