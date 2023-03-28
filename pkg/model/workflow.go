@@ -271,15 +271,13 @@ func (j *Job) Container() *ContainerSpec {
 	switch j.RawContainer.Kind {
 	case yaml.ScalarNode:
 		val = new(ContainerSpec)
-		err := j.RawContainer.Decode(&val.Image)
-		if err != nil {
-			log.Fatal(err)
+		if !decodeNode(j.RawContainer, &val.Image) {
+			return nil
 		}
 	case yaml.MappingNode:
 		val = new(ContainerSpec)
-		err := j.RawContainer.Decode(val)
-		if err != nil {
-			log.Fatal(err)
+		if !decodeNode(j.RawContainer, val) {
+			return nil
 		}
 	}
 	return val
@@ -290,16 +288,14 @@ func (j *Job) Needs() []string {
 	switch j.RawNeeds.Kind {
 	case yaml.ScalarNode:
 		var val string
-		err := j.RawNeeds.Decode(&val)
-		if err != nil {
-			log.Fatal(err)
+		if !decodeNode(j.RawNeeds, &val) {
+			return nil
 		}
 		return []string{val}
 	case yaml.SequenceNode:
 		var val []string
-		err := j.RawNeeds.Decode(&val)
-		if err != nil {
-			log.Fatal(err)
+		if !decodeNode(j.RawNeeds, &val) {
+			return nil
 		}
 		return val
 	}
@@ -311,16 +307,14 @@ func (j *Job) RunsOn() []string {
 	switch j.RawRunsOn.Kind {
 	case yaml.ScalarNode:
 		var val string
-		err := j.RawRunsOn.Decode(&val)
-		if err != nil {
-			log.Fatal(err)
+		if !decodeNode(j.RawRunsOn, &val) {
+			return nil
 		}
 		return []string{val}
 	case yaml.SequenceNode:
 		var val []string
-		err := j.RawRunsOn.Decode(&val)
-		if err != nil {
-			log.Fatal(err)
+		if !decodeNode(j.RawRunsOn, &val) {
+			return nil
 		}
 		return val
 	}
@@ -330,8 +324,8 @@ func (j *Job) RunsOn() []string {
 func environment(yml yaml.Node) map[string]string {
 	env := make(map[string]string)
 	if yml.Kind == yaml.MappingNode {
-		if err := yml.Decode(&env); err != nil {
-			log.Fatal(err)
+		if !decodeNode(yml, &env) {
+			return nil
 		}
 	}
 	return env
@@ -346,8 +340,8 @@ func (j *Job) Environment() map[string]string {
 func (j *Job) Matrix() map[string][]interface{} {
 	if j.Strategy.RawMatrix.Kind == yaml.MappingNode {
 		var val map[string][]interface{}
-		if err := j.Strategy.RawMatrix.Decode(&val); err != nil {
-			log.Fatal(err)
+		if !decodeNode(j.Strategy.RawMatrix, &val) {
+			return nil
 		}
 		return val
 	}
@@ -698,4 +692,18 @@ func (w *Workflow) GetJobIDs() []string {
 		ids = append(ids, id)
 	}
 	return ids
+}
+
+var OnDecodeNodeError = func(node yaml.Node, out interface{}, err error) {
+	log.Fatalf("Failed to decode node %v into %T: %v", node, out, err)
+}
+
+func decodeNode(node yaml.Node, out interface{}) bool {
+	if err := node.Decode(out); err != nil {
+		if OnDecodeNodeError != nil {
+			OnDecodeNodeError(node, out, err)
+		}
+		return false
+	}
+	return true
 }
