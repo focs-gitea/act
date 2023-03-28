@@ -22,7 +22,7 @@ func newLocalReusableWorkflowExecutor(rc *RunContext) common.Executor {
 	// uses string format is {owner}/{repo}/.{git_platform}/workflows/{filename}@{ref}
 	uses := fmt.Sprintf("%s/%s@%s", rc.Config.PresetGitHubContext.Repository, trimmedUses, rc.Config.PresetGitHubContext.Sha)
 
-	remoteReusableWorkflow := newRemoteReusableWorkflow(uses)
+	remoteReusableWorkflow := newRemoteReusableWorkflowWithPlat(uses)
 	if remoteReusableWorkflow == nil {
 		return common.NewErrorExecutor(fmt.Errorf("expected format {owner}/{repo}/.{git_platform}/workflows/{filename}@{ref}. Actual '%s' Input string was not in a correct format", uses))
 	}
@@ -39,7 +39,7 @@ func newLocalReusableWorkflowExecutor(rc *RunContext) common.Executor {
 func newRemoteReusableWorkflowExecutor(rc *RunContext) common.Executor {
 	uses := rc.Run.Job().Uses
 
-	remoteReusableWorkflow := newRemoteReusableWorkflow(uses)
+	remoteReusableWorkflow := newRemoteReusableWorkflowWithPlat(uses)
 	if remoteReusableWorkflow == nil {
 		return common.NewErrorExecutor(fmt.Errorf("expected format {owner}/{repo}/.{git_platform}/workflows/{filename}@{ref}. Actual '%s' Input string was not in a correct format", uses))
 	}
@@ -117,23 +117,27 @@ func NewReusableWorkflowRunner(rc *RunContext) (Runner, error) {
 }
 
 type remoteReusableWorkflow struct {
+	URL      string
+	Org      string
+	Repo     string
+	Filename string
+	Ref      string
+
 	GitPlatform string
-	URL         string
-	Org         string
-	Repo        string
-	Filename    string
-	Ref         string
 }
 
 func (r *remoteReusableWorkflow) CloneURL() string {
-	return fmt.Sprintf("%s/%s/%s", r.URL, r.Org, r.Repo)
+	if strings.HasPrefix(r.URL, "http://") || strings.HasPrefix(r.URL, "https://") {
+		return fmt.Sprintf("%s/%s/%s", r.URL, r.Org, r.Repo)
+	}
+	return fmt.Sprintf("https://%s/%s/%s", r.URL, r.Org, r.Repo)
 }
 
 func (r *remoteReusableWorkflow) FilePath() string {
 	return fmt.Sprintf("./.%s/workflows/%s", r.GitPlatform, r.Filename)
 }
 
-func newRemoteReusableWorkflow(uses string) *remoteReusableWorkflow {
+func newRemoteReusableWorkflowWithPlat(uses string) *remoteReusableWorkflow {
 	// GitHub docs:
 	// https://docs.github.com/en/actions/using-workflows/workflow-syntax-for-github-actions#jobsjob_iduses
 	r := regexp.MustCompile(`^([^/]+)/([^/]+)/\.([^/]+)/workflows/([^@]+)@(.*)$`)
@@ -147,5 +151,23 @@ func newRemoteReusableWorkflow(uses string) *remoteReusableWorkflow {
 		GitPlatform: matches[3],
 		Filename:    matches[4],
 		Ref:         matches[5],
+	}
+}
+
+// deprecated: use newRemoteReusableWorkflowWithPlat
+func newRemoteReusableWorkflow(uses string) *remoteReusableWorkflow {
+	// GitHub docs:
+	// https://docs.github.com/en/actions/using-workflows/workflow-syntax-for-github-actions#jobsjob_iduses
+	r := regexp.MustCompile(`^([^/]+)/([^/]+)/.github/workflows/([^@]+)@(.*)$`)
+	matches := r.FindStringSubmatch(uses)
+	if len(matches) != 5 {
+		return nil
+	}
+	return &remoteReusableWorkflow{
+		Org:      matches[1],
+		Repo:     matches[2],
+		Filename: matches[3],
+		Ref:      matches[4],
+		URL:      "github.com",
 	}
 }
