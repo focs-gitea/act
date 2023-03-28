@@ -127,6 +127,7 @@ type remoteReusableWorkflow struct {
 }
 
 func (r *remoteReusableWorkflow) CloneURL() string {
+	// In Gitea, r.URL always has the protocol prefix, we don't need to add extra prefix in this case.
 	if strings.HasPrefix(r.URL, "http://") || strings.HasPrefix(r.URL, "https://") {
 		return fmt.Sprintf("%s/%s/%s", r.URL, r.Org, r.Repo)
 	}
