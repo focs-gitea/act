@@ -1,8 +1,6 @@
 package jobparser
 
 import (
-	"embed"
-	"path/filepath"
 	"strings"
 	"testing"
 
@@ -12,9 +10,6 @@ import (
 
 	"gopkg.in/yaml.v3"
 )
-
-//go:embed testdata
-var f embed.FS
 
 func TestParse(t *testing.T) {
 	tests := []struct {
@@ -40,10 +35,8 @@ func TestParse(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			content, err := f.ReadFile(filepath.Join("testdata", tt.name+".in.yaml"))
-			require.NoError(t, err)
-			want, err := f.ReadFile(filepath.Join("testdata", tt.name+".out.yaml"))
-			require.NoError(t, err)
+			content := ReadTestdata(t, tt.name+".in.yaml")
+			want := ReadTestdata(t, tt.name+".out.yaml")
 			got, err := Parse(content, tt.options...)
 			if tt.wantErr {
 				require.Error(t, err)
@@ -57,7 +50,10 @@ func TestParse(t *testing.T) {
 				}
 				encoder := yaml.NewEncoder(builder)
 				encoder.SetIndent(2)
-				_ = encoder.Encode(v)
+				require.NoError(t, encoder.Encode(v))
+				id, job := v.Job()
+				assert.NotEmpty(t, id)
+				assert.NotNil(t, job)
 			}
 			assert.Equal(t, string(want), builder.String())
 		})
