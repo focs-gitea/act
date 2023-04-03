@@ -1,0 +1,11 @@
+name: test
+jobs:
+  job1:
+    uses: .gitea/workflows/build.yml
+    with:
+      package: service
+
+  job2:
+    uses: .gitea/workflows/build.yml
+    with:
+      package: module
