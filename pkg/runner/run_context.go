@@ -322,7 +322,6 @@ func (rc *RunContext) startJobContainer() common.Executor {
 				}
 				return err
 			},
-			rc.removeNetwork(networkName),
 			rc.createNetwork(networkName),
 			rc.startServiceContainers(networkName),
 			rc.JobContainer.Create(rc.Config.ContainerCapAdd, rc.Config.ContainerCapDrop),
