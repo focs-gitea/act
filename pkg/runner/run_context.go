@@ -327,8 +327,6 @@ func (rc *RunContext) startJobContainer() common.Executor {
 			rc.JobContainer.Create(rc.Config.ContainerCapAdd, rc.Config.ContainerCapDrop),
 			rc.JobContainer.Start(false),
 			rc.JobContainer.ConnectToNetwork(networkName),
-			rc.JobContainer.UpdateFromImageEnv(&rc.Env),
-			rc.JobContainer.UpdateFromEnv("/etc/environment", &rc.Env),
 			rc.JobContainer.Copy(rc.JobContainer.GetActPath()+"/", &container.FileEntry{
 				Name: "workflow/event.json",
 				Mode: 0o644,
@@ -434,8 +432,6 @@ func (rc *RunContext) startServiceContainers(networkName string) common.Executor
 				c.Create(rc.Config.ContainerCapAdd, rc.Config.ContainerCapDrop),
 				c.Start(false),
 				c.ConnectToNetwork(networkName),
-				c.UpdateFromImageEnv(&rc.Env),
-				c.UpdateFromEnv("/etc/environment", &rc.Env),
 			))
 		}
 		return common.NewParallelExecutor(len(execs), execs...)(ctx)
