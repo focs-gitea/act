@@ -11,11 +11,11 @@ import (
 	"regexp"
 	"strings"
 
+	gogit "github.com/go-git/go-git/v5"
+
 	"github.com/nektos/act/pkg/common"
 	"github.com/nektos/act/pkg/common/git"
 	"github.com/nektos/act/pkg/model"
-
-	gogit "github.com/go-git/go-git/v5"
 )
 
 type stepActionRemote struct {
@@ -44,8 +44,6 @@ func (sar *stepActionRemote) prepareActionExecutor() common.Executor {
 			return fmt.Errorf("Expected format {org}/{repo}[/path]@ref. Actual '%s' Input string was not in a correct format", sar.Step.Uses)
 		}
 
-		sar.remoteAction.URL = sar.RunContext.Config.DefaultActionInstance
-
 		github := sar.getGithubContext(ctx)
 		if sar.remoteAction.IsCheckout() && isLocalCheckout(github, sar.Step) && !sar.RunContext.Config.NoSkipCheckout {
 			common.Logger(ctx).Debugf("Skipping local actions/checkout because workdir was already copied")
@@ -59,12 +57,18 @@ func (sar *stepActionRemote) prepareActionExecutor() common.Executor {
 			}
 		}
 
-		actionDir := fmt.Sprintf("%s/%s", sar.RunContext.ActionCacheDir(), strings.ReplaceAll(sar.Step.Uses, "/", "-"))
+		actionDir := fmt.Sprintf("%s/%s", sar.RunContext.ActionCacheDir(), safeFilename(sar.Step.Uses))
 		gitClone := stepActionRemoteNewCloneExecutor(git.NewGitCloneExecutorInput{
-			URL:   sar.remoteAction.CloneURL(),
+			URL:   sar.remoteAction.CloneURL(sar.RunContext.Config.DefaultActionInstance),
 			Ref:   sar.remoteAction.Ref,
 			Dir:   actionDir,
-			Token: github.Token,
+			Token: "", /*
+				Shouldn't provide token when cloning actions,
+				the token comes from the instance which triggered the task,
+				however, it might be not the same instance which provides actions.
+				For GitHub, they are the same, always github.com.
+				But for Gitea, tasks triggered by a.com can clone actions from b.com.
+			*/
 		})
 		var ntErr common.Executor
 		if err := gitClone(ctx); err != nil {
@@ -119,7 +123,7 @@ func (sar *stepActionRemote) main() common.Executor {
 				return sar.RunContext.JobContainer.CopyDir(copyToPath, sar.RunContext.Config.Workdir+string(filepath.Separator)+".", sar.RunContext.Config.UseGitIgnore)(ctx)
 			}
 
-			actionDir := fmt.Sprintf("%s/%s", sar.RunContext.ActionCacheDir(), strings.ReplaceAll(sar.Step.Uses, "/", "-"))
+			actionDir := fmt.Sprintf("%s/%s", sar.RunContext.ActionCacheDir(), safeFilename(sar.Step.Uses))
 
 			return sar.runAction(sar, actionDir, sar.remoteAction)(ctx)
 		}),
@@ -178,7 +182,7 @@ func (sar *stepActionRemote) getActionModel() *model.Action {
 
 func (sar *stepActionRemote) getCompositeRunContext(ctx context.Context) *RunContext {
 	if sar.compositeRunContext == nil {
-		actionDir := fmt.Sprintf("%s/%s", sar.RunContext.ActionCacheDir(), strings.ReplaceAll(sar.Step.Uses, "/", "-"))
+		actionDir := fmt.Sprintf("%s/%s", sar.RunContext.ActionCacheDir(), safeFilename(sar.Step.Uses))
 		actionLocation := path.Join(actionDir, sar.remoteAction.Path)
 		_, containerActionDir := getContainerActionPaths(sar.getStepModel(), actionLocation, sar.RunContext)
 
@@ -193,6 +197,7 @@ func (sar *stepActionRemote) getCompositeRunContext(ctx context.Context) *RunCon
 		// was already created during the pre stage)
 		env := evaluateCompositeInputAndEnv(ctx, sar.RunContext, sar)
 		sar.compositeRunContext.Env = env
+		sar.compositeRunContext.ExtraPath = sar.RunContext.ExtraPath
 	}
 	return sar.compositeRunContext
 }
@@ -209,8 +214,11 @@ type remoteAction struct {
 	Ref  string
 }
 
-func (ra *remoteAction) CloneURL() string {
+func (ra *remoteAction) CloneURL(defaultURL string) string {
 	u := ra.URL
+	if u == "" {
+		u = defaultURL
+	}
 	if !strings.HasPrefix(u, "http://") && !strings.HasPrefix(u, "https://") {
 		u = "https://" + u
 	}
@@ -225,6 +233,26 @@ func (ra *remoteAction) IsCheckout() bool {
 }
 
 func newRemoteAction(action string) *remoteAction {
+	// support http(s)://host/owner/repo@v3
+	for _, schema := range []string{"https://", "http://"} {
+		if strings.HasPrefix(action, schema) {
+			splits := strings.SplitN(strings.TrimPrefix(action, schema), "/", 2)
+			if len(splits) != 2 {
+				return nil
+			}
+			ret := parseAction(splits[1])
+			if ret == nil {
+				return nil
+			}
+			ret.URL = schema + splits[0]
+			return ret
+		}
+	}
+
+	return parseAction(action)
+}
+
+func parseAction(action string) *remoteAction {
 	// GitHub's document[^] describes:
 	// > We strongly recommend that you include the version of
 	// > the action you are using by specifying a Git ref, SHA, or Docker tag number.
@@ -240,6 +268,20 @@ func newRemoteAction(action string) *remoteAction {
 		Repo: matches[2],
 		Path: matches[4],
 		Ref:  matches[6],
-		URL:  "github.com",
+		URL:  "",
 	}
+}
+
+func safeFilename(s string) string {
+	return strings.NewReplacer(
+		`<`, "-",
+		`>`, "-",
+		`:`, "-",
+		`"`, "-",
+		`/`, "-",
+		`\`, "-",
+		`|`, "-",
+		`?`, "-",
+		`*`, "-",
+	).Replace(s)
 }

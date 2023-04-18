@@ -20,7 +20,7 @@ func (a *ActionRunsUsing) UnmarshalYAML(unmarshal func(interface{}) error) error
 	// Force input to lowercase for case insensitive comparison
 	format := ActionRunsUsing(strings.ToLower(using))
 	switch format {
-	case ActionRunsUsingNode16, ActionRunsUsingNode12, ActionRunsUsingDocker, ActionRunsUsingComposite:
+	case ActionRunsUsingNode16, ActionRunsUsingNode12, ActionRunsUsingDocker, ActionRunsUsingComposite, ActionRunsUsingGo:
 		*a = format
 	default:
 		return fmt.Errorf(fmt.Sprintf("The runs.using key in action.yml must be one of: %v, got %s", []string{
@@ -28,6 +28,7 @@ func (a *ActionRunsUsing) UnmarshalYAML(unmarshal func(interface{}) error) error
 			ActionRunsUsingDocker,
 			ActionRunsUsingNode12,
 			ActionRunsUsingNode16,
+			ActionRunsUsingGo,
 		}, format))
 	}
 	return nil
@@ -42,6 +43,8 @@ const (
 	ActionRunsUsingDocker = "docker"
 	// ActionRunsUsingComposite for running composite
 	ActionRunsUsingComposite = "composite"
+	// ActionRunsUsingGo for running with go
+	ActionRunsUsingGo = "go"
 )
 
 // ActionRuns are a field in Action
