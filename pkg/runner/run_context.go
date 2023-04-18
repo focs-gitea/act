@@ -253,13 +253,14 @@ func (rc *RunContext) startJobContainer() common.Executor {
 			c := container.NewContainer(&container.NewContainerInput{
 				Name:       serviceContainerName,
 				WorkingDir: rc.Config.Workdir,
-				Image:      spec.Image,
-				Username:   username,
-				Password:   password,
-				Env:        mergedEnv,
+				// WorkingDir: ext.ToContainerPath(rc.Config.Workdir),
+				Image:    spec.Image,
+				Username: username,
+				Password: password,
+				Env:      mergedEnv,
 				Mounts: map[string]string{
 					// TODO merge volumes
-					name:            filepath.Dir(rc.Config.Workdir),
+					name:            ext.ToContainerPath(rc.Config.Workdir),
 					"act-toolcache": "/toolcache",
 					"act-actions":   "/actions",
 				},

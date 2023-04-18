@@ -562,7 +562,7 @@ func TestRunWithService(t *testing.T) {
 	eventName := "push"
 
 	workdir, err := filepath.Abs("testdata")
-	assert.NilError(t, err, workflowPath)
+	assert.NoError(t, err, workflowPath)
 
 	runnerConfig := &Config{
 		Workdir:         workdir,
@@ -571,15 +571,16 @@ func TestRunWithService(t *testing.T) {
 		ReuseContainers: false,
 	}
 	runner, err := New(runnerConfig)
-	assert.NilError(t, err, workflowPath)
+	assert.NoError(t, err, workflowPath)
 
 	planner, err := model.NewWorkflowPlanner(fmt.Sprintf("testdata/%s", workflowPath), true)
-	assert.NilError(t, err, workflowPath)
+	assert.NoError(t, err, workflowPath)
 
-	plan := planner.PlanEvent(eventName)
+	plan, err := planner.PlanEvent(eventName)
+	assert.NoError(t, err, workflowPath)
 
 	err = runner.NewPlanExecutor(plan)(ctx)
-	assert.NilError(t, err, workflowPath)
+	assert.NoError(t, err, workflowPath)
 }
 
 func TestRunActionInputs(t *testing.T) {
