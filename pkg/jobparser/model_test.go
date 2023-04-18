@@ -6,7 +6,10 @@ import (
 	"testing"
 
 	"github.com/nektos/act/pkg/model"
+
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+	"gopkg.in/yaml.v3"
 )
 
 func TestParseRawOn(t *testing.T) {
@@ -47,7 +50,7 @@ func TestParseRawOn(t *testing.T) {
 			result: []*Event{
 				{
 					Name: "push",
-					Acts: map[string][]string{
+					acts: map[string][]string{
 						"branches": {
 							"master",
 						},
@@ -60,7 +63,7 @@ func TestParseRawOn(t *testing.T) {
 			result: []*Event{
 				{
 					Name: "branch_protection_rule",
-					Acts: map[string][]string{
+					acts: map[string][]string{
 						"types": {
 							"created",
 							"deleted",
@@ -74,7 +77,7 @@ func TestParseRawOn(t *testing.T) {
 			result: []*Event{
 				{
 					Name: "project",
-					Acts: map[string][]string{
+					acts: map[string][]string{
 						"types": {
 							"created",
 							"deleted",
@@ -83,7 +86,7 @@ func TestParseRawOn(t *testing.T) {
 				},
 				{
 					Name: "milestone",
-					Acts: map[string][]string{
+					acts: map[string][]string{
 						"types": {
 							"opened",
 							"deleted",
@@ -97,7 +100,7 @@ func TestParseRawOn(t *testing.T) {
 			result: []*Event{
 				{
 					Name: "pull_request",
-					Acts: map[string][]string{
+					acts: map[string][]string{
 						"types": {
 							"opened",
 						},
@@ -113,7 +116,7 @@ func TestParseRawOn(t *testing.T) {
 			result: []*Event{
 				{
 					Name: "push",
-					Acts: map[string][]string{
+					acts: map[string][]string{
 						"branches": {
 							"main",
 						},
@@ -121,7 +124,7 @@ func TestParseRawOn(t *testing.T) {
 				},
 				{
 					Name: "pull_request",
-					Acts: map[string][]string{
+					acts: map[string][]string{
 						"types": {
 							"opened",
 						},
@@ -137,7 +140,7 @@ func TestParseRawOn(t *testing.T) {
 			result: []*Event{
 				{
 					Name: "push",
-					Acts: map[string][]string{
+					acts: map[string][]string{
 						"branches": {
 							"main",
 							"releases/**",
@@ -151,7 +154,7 @@ func TestParseRawOn(t *testing.T) {
 			result: []*Event{
 				{
 					Name: "push",
-					Acts: map[string][]string{
+					acts: map[string][]string{
 						"tags": {
 							"v1.**",
 						},
@@ -170,6 +173,19 @@ func TestParseRawOn(t *testing.T) {
 				},
 			},
 		},
+		{
+			input: "on:\n  schedule:\n    - cron: '20 6 * * *'",
+			result: []*Event{
+				{
+					Name: "schedule",
+					schedules: []map[string]string{
+						{
+							"cron": "20 6 * * *",
+						},
+					},
+				},
+			},
+		},
 	}
 	for _, kase := range kases {
 		t.Run(kase.input, func(t *testing.T) {
@@ -181,4 +197,26 @@ func TestParseRawOn(t *testing.T) {
 			assert.EqualValues(t, kase.result, events, fmt.Sprintf("%#v", events))
 		})
 	}
+}
+
+func TestSingleWorkflow_SetJob(t *testing.T) {
+	t.Run("erase needs", func(t *testing.T) {
+		content := ReadTestdata(t, "erase_needs.in.yaml")
+		want := ReadTestdata(t, "erase_needs.out.yaml")
+		swf, err := Parse(content)
+		require.NoError(t, err)
+		builder := &strings.Builder{}
+		for _, v := range swf {
+			id, job := v.Job()
+			require.NoError(t, v.SetJob(id, job.EraseNeeds()))
+
+			if builder.Len() > 0 {
+				builder.WriteString("---\n")
+			}
+			encoder := yaml.NewEncoder(builder)
+			encoder.SetIndent(2)
+			require.NoError(t, encoder.Encode(v))
+		}
+		assert.Equal(t, string(want), builder.String())
+	})
 }

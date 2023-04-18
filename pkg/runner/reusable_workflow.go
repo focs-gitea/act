@@ -8,6 +8,7 @@ import (
 	"os"
 	"path"
 	"regexp"
+	"strings"
 	"sync"
 
 	"github.com/nektos/act/pkg/common"
@@ -16,23 +17,45 @@ import (
 )
 
 func newLocalReusableWorkflowExecutor(rc *RunContext) common.Executor {
-	return newReusableWorkflowExecutor(rc, rc.Config.Workdir, rc.Run.Job().Uses)
-}
+	// ./.gitea/workflows/wf.yml -> .gitea/workflows/wf.yml
+	trimmedUses := strings.TrimPrefix(rc.Run.Job().Uses, "./")
+	// uses string format is {owner}/{repo}/.{git_platform}/workflows/{filename}@{ref}
+	uses := fmt.Sprintf("%s/%s@%s", rc.Config.PresetGitHubContext.Repository, trimmedUses, rc.Config.PresetGitHubContext.Sha)
 
-func newRemoteReusableWorkflowExecutor(rc *RunContext) common.Executor {
-	uses := rc.Run.Job().Uses
-
-	remoteReusableWorkflow := newRemoteReusableWorkflow(uses)
+	remoteReusableWorkflow := newRemoteReusableWorkflowWithPlat(uses)
 	if remoteReusableWorkflow == nil {
-		return common.NewErrorExecutor(fmt.Errorf("expected format {owner}/{repo}/.github/workflows/{filename}@{ref}. Actual '%s' Input string was not in a correct format", uses))
+		return common.NewErrorExecutor(fmt.Errorf("expected format {owner}/{repo}/.{git_platform}/workflows/{filename}@{ref}. Actual '%s' Input string was not in a correct format", uses))
 	}
 	remoteReusableWorkflow.URL = rc.Config.GitHubInstance
 
 	workflowDir := fmt.Sprintf("%s/%s", rc.ActionCacheDir(), safeFilename(uses))
 
+	// If the repository is private, we need a token to clone it
+	token := rc.Config.GetToken()
+
 	return common.NewPipelineExecutor(
-		newMutexExecutor(cloneIfRequired(rc, *remoteReusableWorkflow, workflowDir)),
-		newReusableWorkflowExecutor(rc, workflowDir, fmt.Sprintf("./.github/workflows/%s", remoteReusableWorkflow.Filename)),
+		newMutexExecutor(cloneIfRequired(rc, *remoteReusableWorkflow, workflowDir, token)),
+		newReusableWorkflowExecutor(rc, workflowDir, remoteReusableWorkflow.FilePath()),
+	)
+}
+
+func newRemoteReusableWorkflowExecutor(rc *RunContext) common.Executor {
+	uses := rc.Run.Job().Uses
+
+	remoteReusableWorkflow := newRemoteReusableWorkflowWithPlat(uses)
+	if remoteReusableWorkflow == nil {
+		return common.NewErrorExecutor(fmt.Errorf("expected format {owner}/{repo}/.{git_platform}/workflows/{filename}@{ref}. Actual '%s' Input string was not in a correct format", uses))
+	}
+	remoteReusableWorkflow.URL = rc.Config.GitHubInstance
+
+	workflowDir := fmt.Sprintf("%s/%s", rc.ActionCacheDir(), safeFilename(uses))
+
+	// FIXME: if the reusable workflow is from a private repository, we need to provide a token to access the repository.
+	token := ""
+
+	return common.NewPipelineExecutor(
+		newMutexExecutor(cloneIfRequired(rc, *remoteReusableWorkflow, workflowDir, token)),
+		newReusableWorkflowExecutor(rc, workflowDir, remoteReusableWorkflow.FilePath()),
 	)
 }
 
@@ -49,7 +72,7 @@ func newMutexExecutor(executor common.Executor) common.Executor {
 	}
 }
 
-func cloneIfRequired(rc *RunContext, remoteReusableWorkflow remoteReusableWorkflow, targetDirectory string) common.Executor {
+func cloneIfRequired(rc *RunContext, remoteReusableWorkflow remoteReusableWorkflow, targetDirectory, token string) common.Executor {
 	return common.NewConditionalExecutor(
 		func(ctx context.Context) bool {
 			_, err := os.Stat(targetDirectory)
@@ -60,7 +83,7 @@ func cloneIfRequired(rc *RunContext, remoteReusableWorkflow remoteReusableWorkfl
 			URL:   remoteReusableWorkflow.CloneURL(),
 			Ref:   remoteReusableWorkflow.Ref,
 			Dir:   targetDirectory,
-			Token: rc.Config.Token,
+			Token: token,
 		}),
 		nil,
 	)
@@ -105,12 +128,40 @@ type remoteReusableWorkflow struct {
 	Repo     string
 	Filename string
 	Ref      string
+
+	GitPlatform string
 }
 
 func (r *remoteReusableWorkflow) CloneURL() string {
+	// In Gitea, r.URL always has the protocol prefix, we don't need to add extra prefix in this case.
+	if strings.HasPrefix(r.URL, "http://") || strings.HasPrefix(r.URL, "https://") {
+		return fmt.Sprintf("%s/%s/%s", r.URL, r.Org, r.Repo)
+	}
 	return fmt.Sprintf("https://%s/%s/%s", r.URL, r.Org, r.Repo)
 }
 
+func (r *remoteReusableWorkflow) FilePath() string {
+	return fmt.Sprintf("./.%s/workflows/%s", r.GitPlatform, r.Filename)
+}
+
+func newRemoteReusableWorkflowWithPlat(uses string) *remoteReusableWorkflow {
+	// GitHub docs:
+	// https://docs.github.com/en/actions/using-workflows/workflow-syntax-for-github-actions#jobsjob_iduses
+	r := regexp.MustCompile(`^([^/]+)/([^/]+)/\.([^/]+)/workflows/([^@]+)@(.*)$`)
+	matches := r.FindStringSubmatch(uses)
+	if len(matches) != 6 {
+		return nil
+	}
+	return &remoteReusableWorkflow{
+		Org:         matches[1],
+		Repo:        matches[2],
+		GitPlatform: matches[3],
+		Filename:    matches[4],
+		Ref:         matches[5],
+	}
+}
+
+// deprecated: use newRemoteReusableWorkflowWithPlat
 func newRemoteReusableWorkflow(uses string) *remoteReusableWorkflow {
 	// GitHub docs:
 	// https://docs.github.com/en/actions/using-workflows/workflow-syntax-for-github-actions#jobsjob_iduses

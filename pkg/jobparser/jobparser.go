@@ -36,8 +36,17 @@ func Parse(content []byte, options ...ParseOption) ([]*SingleWorkflow, error) {
 	}
 
 	var ret []*SingleWorkflow
-	for id, job := range workflow.Jobs {
-		for _, matrix := range getMatrixes(origin.GetJob(id)) {
+	ids, jobs, err := workflow.jobs()
+	if err != nil {
+		return nil, fmt.Errorf("invalid jobs: %w", err)
+	}
+	for i, id := range ids {
+		job := jobs[i]
+		matricxes, err := getMatrixes(origin.GetJob(id))
+		if err != nil {
+			return nil, fmt.Errorf("getMatrixes: %w", err)
+		}
+		for _, matrix := range matricxes {
 			job := job.Clone()
 			if job.Name == "" {
 				job.Name = id
@@ -50,17 +59,18 @@ func Parse(content []byte, options ...ParseOption) ([]*SingleWorkflow, error) {
 				runsOn[i] = evaluator.Interpolate(v)
 			}
 			job.RawRunsOn = encodeRunsOn(runsOn)
-			job.EraseNeeds() // there will be only one job in SingleWorkflow, it cannot have needs
-			ret = append(ret, &SingleWorkflow{
+			swf := &SingleWorkflow{
 				Name:     workflow.Name,
 				RawOn:    workflow.RawOn,
 				Env:      workflow.Env,
-				Jobs:     map[string]*Job{id: job},
 				Defaults: workflow.Defaults,
-			})
+			}
+			if err := swf.SetJob(id, job); err != nil {
+				return nil, fmt.Errorf("SetJob: %w", err)
+			}
+			ret = append(ret, swf)
 		}
 	}
-	sortWorkflows(ret)
 	return ret, nil
 }
 
@@ -83,12 +93,15 @@ type parseContext struct {
 
 type ParseOption func(c *parseContext)
 
-func getMatrixes(job *model.Job) []map[string]interface{} {
-	ret := job.GetMatrixes()
+func getMatrixes(job *model.Job) ([]map[string]interface{}, error) {
+	ret, err := job.GetMatrixes()
+	if err != nil {
+		return nil, fmt.Errorf("GetMatrixes: %w", err)
+	}
 	sort.Slice(ret, func(i, j int) bool {
 		return matrixName(ret[i]) < matrixName(ret[j])
 	})
-	return ret
+	return ret, nil
 }
 
 func encodeMatrix(matrix map[string]interface{}) yaml.Node {
@@ -134,20 +147,4 @@ func matrixName(m map[string]interface{}) string {
 	}
 
 	return fmt.Sprintf("(%s)", strings.Join(vs, ", "))
-}
-
-func sortWorkflows(wfs []*SingleWorkflow) {
-	sort.Slice(wfs, func(i, j int) bool {
-		ki := ""
-		for k := range wfs[i].Jobs {
-			ki = k
-			break
-		}
-		kj := ""
-		for k := range wfs[j].Jobs {
-			kj = k
-			break
-		}
-		return ki < kj
-	})
 }

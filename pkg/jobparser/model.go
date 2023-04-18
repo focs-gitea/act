@@ -12,15 +12,61 @@ type SingleWorkflow struct {
 	Name     string            `yaml:"name,omitempty"`
 	RawOn    yaml.Node         `yaml:"on,omitempty"`
 	Env      map[string]string `yaml:"env,omitempty"`
-	Jobs     map[string]*Job   `yaml:"jobs,omitempty"`
+	RawJobs  yaml.Node         `yaml:"jobs,omitempty"`
 	Defaults Defaults          `yaml:"defaults,omitempty"`
 }
 
 func (w *SingleWorkflow) Job() (string, *Job) {
-	for k, v := range w.Jobs {
-		return k, v
+	ids, jobs, _ := w.jobs()
+	if len(ids) >= 1 {
+		return ids[0], jobs[0]
 	}
 	return "", nil
+}
+
+func (w *SingleWorkflow) jobs() ([]string, []*Job, error) {
+	var ids []string
+	var jobs []*Job
+	expectKey := true
+	for _, item := range w.RawJobs.Content {
+		if expectKey {
+			if item.Kind != yaml.ScalarNode {
+				return nil, nil, fmt.Errorf("invalid job id: %v", item.Value)
+			}
+			ids = append(ids, item.Value)
+			expectKey = false
+		} else {
+			job := &Job{}
+			if err := item.Decode(job); err != nil {
+				return nil, nil, fmt.Errorf("yaml.Unmarshal: %w", err)
+			}
+			jobs = append(jobs, job)
+			expectKey = true
+		}
+	}
+	if len(ids) != len(jobs) {
+		return nil, nil, fmt.Errorf("invalid jobs: %v", w.RawJobs.Value)
+	}
+	return ids, jobs, nil
+}
+
+func (w *SingleWorkflow) SetJob(id string, job *Job) error {
+	m := map[string]*Job{
+		id: job,
+	}
+	out, err := yaml.Marshal(m)
+	if err != nil {
+		return err
+	}
+	node := yaml.Node{}
+	if err := yaml.Unmarshal(out, &node); err != nil {
+		return err
+	}
+	if len(node.Content) != 1 || node.Content[0].Kind != yaml.MappingNode {
+		return fmt.Errorf("can not set job: %q", out)
+	}
+	w.RawJobs = *node.Content[0]
+	return nil
 }
 
 func (w *SingleWorkflow) Marshal() ([]byte, error) {
@@ -41,6 +87,8 @@ type Job struct {
 	Defaults       Defaults                  `yaml:"defaults,omitempty"`
 	Outputs        map[string]string         `yaml:"outputs,omitempty"`
 	Uses           string                    `yaml:"uses,omitempty"`
+	With           map[string]interface{}    `yaml:"with,omitempty"`
+	RawSecrets     yaml.Node                 `yaml:"secrets,omitempty"`
 }
 
 func (j *Job) Clone() *Job {
@@ -61,6 +109,8 @@ func (j *Job) Clone() *Job {
 		Defaults:       j.Defaults,
 		Outputs:        j.Outputs,
 		Uses:           j.Uses,
+		With:           j.With,
+		RawSecrets:     j.RawSecrets,
 	}
 }
 
@@ -68,8 +118,9 @@ func (j *Job) Needs() []string {
 	return (&model.Job{RawNeeds: j.RawNeeds}).Needs()
 }
 
-func (j *Job) EraseNeeds() {
+func (j *Job) EraseNeeds() *Job {
 	j.RawNeeds = yaml.Node{}
+	return j
 }
 
 func (j *Job) RunsOn() []string {
@@ -125,8 +176,21 @@ type RunDefaults struct {
 }
 
 type Event struct {
-	Name string
-	Acts map[string][]string
+	Name      string
+	acts      map[string][]string
+	schedules []map[string]string
+}
+
+func (evt *Event) IsSchedule() bool {
+	return evt.schedules != nil
+}
+
+func (evt *Event) Acts() map[string][]string {
+	return evt.acts
+}
+
+func (evt *Event) Schedules() []map[string]string {
+	return evt.schedules
 }
 
 func ParseRawOn(rawOn *yaml.Node) ([]*Event, error) {
@@ -164,16 +228,23 @@ func ParseRawOn(rawOn *yaml.Node) ([]*Event, error) {
 		}
 		res := make([]*Event, 0, len(val))
 		for k, v := range val {
+			if v == nil {
+				res = append(res, &Event{
+					Name: k,
+					acts: map[string][]string{},
+				})
+				continue
+			}
 			switch t := v.(type) {
 			case string:
 				res = append(res, &Event{
 					Name: k,
-					Acts: map[string][]string{},
+					acts: map[string][]string{},
 				})
 			case []string:
 				res = append(res, &Event{
 					Name: k,
-					Acts: map[string][]string{},
+					acts: map[string][]string{},
 				})
 			case map[string]interface{}:
 				acts := make(map[string][]string, len(t))
@@ -186,7 +257,10 @@ func ParseRawOn(rawOn *yaml.Node) ([]*Event, error) {
 					case []interface{}:
 						acts[act] = make([]string, len(b))
 						for i, v := range b {
-							acts[act][i] = v.(string)
+							var ok bool
+							if acts[act][i], ok = v.(string); !ok {
+								return nil, fmt.Errorf("unknown on type: %#v", branches)
+							}
 						}
 					default:
 						return nil, fmt.Errorf("unknown on type: %#v", branches)
@@ -194,7 +268,29 @@ func ParseRawOn(rawOn *yaml.Node) ([]*Event, error) {
 				}
 				res = append(res, &Event{
 					Name: k,
-					Acts: acts,
+					acts: acts,
+				})
+			case []interface{}:
+				if k != "schedule" {
+					return nil, fmt.Errorf("unknown on type: %#v", v)
+				}
+				schedules := make([]map[string]string, len(t))
+				for i, tt := range t {
+					vv, ok := tt.(map[string]interface{})
+					if !ok {
+						return nil, fmt.Errorf("unknown on type: %#v", v)
+					}
+					schedules[i] = make(map[string]string, len(vv))
+					for k, vvv := range vv {
+						var ok bool
+						if schedules[i][k], ok = vvv.(string); !ok {
+							return nil, fmt.Errorf("unknown on type: %#v", v)
+						}
+					}
+				}
+				res = append(res, &Event{
+					Name:      k,
+					schedules: schedules,
 				})
 			default:
 				return nil, fmt.Errorf("unknown on type: %#v", v)

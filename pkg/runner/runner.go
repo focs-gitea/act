@@ -7,11 +7,11 @@ import (
 	"os"
 	"time"
 
-	log "github.com/sirupsen/logrus"
-
 	"github.com/nektos/act/pkg/common"
 	"github.com/nektos/act/pkg/container"
 	"github.com/nektos/act/pkg/model"
+
+	log "github.com/sirupsen/logrus"
 )
 
 // Runner provides capabilities to run GitHub actions
@@ -64,6 +64,14 @@ type Config struct {
 	DefaultActionInstance string                       // the default actions web site
 	PlatformPicker        func(labels []string) string // platform picker, it will take precedence over Platforms if isn't nil
 	JobLoggerLevel        *log.Level                   // the level of job logger
+}
+
+func (c Config) GetToken() string {
+	token := c.Secrets["GITHUB_TOKEN"]
+	if c.Secrets["GITEA_TOKEN"] != "" {
+		token = c.Secrets["GITEA_TOKEN"]
+	}
+	return token
 }
 
 type caller struct {
@@ -128,7 +136,11 @@ func (runner *runnerImpl) NewPlanExecutor(plan *model.Plan) common.Executor {
 						log.Errorf("Error while evaluating matrix: %v", err)
 					}
 				}
-				matrixes := job.GetMatrixes()
+				matrixes, err := job.GetMatrixes()
+				if err != nil {
+					log.Errorf("Error while get job's matrix: %v", err)
+					// fall back to empty matrixes
+				}
 				maxParallel := 4
 				if job.Strategy != nil {
 					maxParallel = job.Strategy.MaxParallel
