@@ -33,7 +33,6 @@ func NewDockerNetworkRemoveExecutor(name string) common.Executor {
 			return err
 		}
 
-		_ = cli.NetworkRemove(ctx, name)
-		return nil
+		return cli.NetworkRemove(ctx, name)
 	}
 }

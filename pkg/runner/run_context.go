@@ -18,6 +18,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/docker/docker/errdefs"
 	"github.com/mitchellh/go-homedir"
 	"github.com/opencontainers/selinux/go-selinux"
 	log "github.com/sirupsen/logrus"
@@ -252,12 +253,11 @@ func (rc *RunContext) startJobContainer() common.Executor {
 			serviceContainerName := createSimpleContainerName(rc.jobContainerName(), name)
 			c := container.NewContainer(&container.NewContainerInput{
 				Name:       serviceContainerName,
-				WorkingDir: rc.Config.Workdir,
-				// WorkingDir: ext.ToContainerPath(rc.Config.Workdir),
-				Image:    spec.Image,
-				Username: username,
-				Password: password,
-				Env:      mergedEnv,
+				WorkingDir: ext.ToContainerPath(rc.Config.Workdir),
+				Image:      spec.Image,
+				Username:   username,
+				Password:   password,
+				Env:        mergedEnv,
 				Mounts: map[string]string{
 					// TODO merge volumes
 					name:            ext.ToContainerPath(rc.Config.Workdir),
@@ -315,6 +315,13 @@ func (rc *RunContext) startJobContainer() common.Executor {
 			rc.JobContainer.Pull(rc.Config.ForcePull),
 			rc.stopServiceContainers(),
 			rc.stopJobContainer(),
+			func(ctx context.Context) error {
+				err := rc.removeNetwork(networkName)(ctx)
+				if errdefs.IsNotFound(err) {
+					return nil
+				}
+				return err
+			},
 			rc.removeNetwork(networkName),
 			rc.createNetwork(networkName),
 			rc.startServiceContainers(networkName),
