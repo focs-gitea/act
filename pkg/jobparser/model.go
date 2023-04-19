@@ -193,6 +193,39 @@ func (evt *Event) Schedules() []map[string]string {
 	return evt.schedules
 }
 
+// ParseRawOnMappingNode parse a mapping node and preserve order.
+func ParseRawOnMappingNode(on *yaml.Node) ([]string, []interface{}, error) {
+	if on.Kind != yaml.MappingNode {
+		return nil, nil, fmt.Errorf("input node is not a mapping node")
+	}
+
+	var types []string // This slice saves trigger types such as `issue`, `pull_request`, `push` etc.
+	var triggers []interface{}
+	expectKey := true
+	for _, item := range on.Content {
+		if expectKey {
+			if item.Kind != yaml.ScalarNode {
+				return nil, nil, fmt.Errorf("not a valid trigger type: %v", item.Value)
+			}
+			types = append(types, item.Value)
+			expectKey = false
+		} else {
+			var val interface{}
+			if err := item.Decode(&val); err != nil {
+				return nil, nil, err
+			}
+			triggers = append(triggers, val)
+			expectKey = true
+		}
+	}
+
+	if len(types) != len(triggers) {
+		return nil, nil, fmt.Errorf("invalid definition of on: %v", on.Value)
+	}
+
+	return types, triggers, nil
+}
+
 func ParseRawOn(rawOn *yaml.Node) ([]*Event, error) {
 	switch rawOn.Kind {
 	case yaml.ScalarNode:
@@ -221,13 +254,16 @@ func ParseRawOn(rawOn *yaml.Node) ([]*Event, error) {
 		}
 		return res, nil
 	case yaml.MappingNode:
-		var val map[string]interface{}
-		err := rawOn.Decode(&val)
+		types, triggers, err := ParseRawOnMappingNode(rawOn)
 		if err != nil {
 			return nil, err
 		}
-		res := make([]*Event, 0, len(val))
-		for k, v := range val {
+		if err != nil {
+			return nil, err
+		}
+		res := make([]*Event, 0, len(types))
+		for i, k := range types {
+			v := triggers[i]
 			if v == nil {
 				res = append(res, &Event{
 					Name: k,
