@@ -25,29 +25,11 @@ func (w *SingleWorkflow) Job() (string, *Job) {
 }
 
 func (w *SingleWorkflow) jobs() ([]string, []*Job, error) {
-	var ids []string
-	var jobs []*Job
-	expectKey := true
-	for _, item := range w.RawJobs.Content {
-		if expectKey {
-			if item.Kind != yaml.ScalarNode {
-				return nil, nil, fmt.Errorf("invalid job id: %v", item.Value)
-			}
-			ids = append(ids, item.Value)
-			expectKey = false
-		} else {
-			job := &Job{}
-			if err := item.Decode(job); err != nil {
-				return nil, nil, fmt.Errorf("yaml.Unmarshal: %w", err)
-			}
-			jobs = append(jobs, job)
-			expectKey = true
-		}
+	ids, datas, err := parseMappingNode[*Job](&w.RawJobs)
+	if err != nil {
+		return nil, nil, err
 	}
-	if len(ids) != len(jobs) {
-		return nil, nil, fmt.Errorf("invalid jobs: %v", w.RawJobs.Value)
-	}
-	return ids, jobs, nil
+	return ids, datas, nil
 }
 
 func (w *SingleWorkflow) SetJob(id string, job *Job) error {
@@ -193,39 +175,6 @@ func (evt *Event) Schedules() []map[string]string {
 	return evt.schedules
 }
 
-// ParseRawOnMappingNode parse a mapping node and preserve order.
-func ParseRawOnMappingNode(on *yaml.Node) ([]string, []interface{}, error) {
-	if on.Kind != yaml.MappingNode {
-		return nil, nil, fmt.Errorf("input node is not a mapping node")
-	}
-
-	var types []string // This slice saves trigger types such as `issue`, `pull_request`, `push` etc.
-	var triggers []interface{}
-	expectKey := true
-	for _, item := range on.Content {
-		if expectKey {
-			if item.Kind != yaml.ScalarNode {
-				return nil, nil, fmt.Errorf("not a valid trigger type: %v", item.Value)
-			}
-			types = append(types, item.Value)
-			expectKey = false
-		} else {
-			var val interface{}
-			if err := item.Decode(&val); err != nil {
-				return nil, nil, err
-			}
-			triggers = append(triggers, val)
-			expectKey = true
-		}
-	}
-
-	if len(types) != len(triggers) {
-		return nil, nil, fmt.Errorf("invalid definition of on: %v", on.Value)
-	}
-
-	return types, triggers, nil
-}
-
 func ParseRawOn(rawOn *yaml.Node) ([]*Event, error) {
 	switch rawOn.Kind {
 	case yaml.ScalarNode:
@@ -254,15 +203,12 @@ func ParseRawOn(rawOn *yaml.Node) ([]*Event, error) {
 		}
 		return res, nil
 	case yaml.MappingNode:
-		types, triggers, err := ParseRawOnMappingNode(rawOn)
+		events, triggers, err := parseMappingNode[interface{}](rawOn)
 		if err != nil {
 			return nil, err
 		}
-		if err != nil {
-			return nil, err
-		}
-		res := make([]*Event, 0, len(types))
-		for i, k := range types {
+		res := make([]*Event, 0, len(events))
+		for i, k := range events {
 			v := triggers[i]
 			if v == nil {
 				res = append(res, &Event{
@@ -336,4 +282,37 @@ func ParseRawOn(rawOn *yaml.Node) ([]*Event, error) {
 	default:
 		return nil, fmt.Errorf("unknown on type: %v", rawOn.Kind)
 	}
+}
+
+// parseMappingNode parse a mapping node and preserve order.
+func parseMappingNode[T any](node *yaml.Node) ([]string, []T, error) {
+	if node.Kind != yaml.MappingNode {
+		return nil, nil, fmt.Errorf("input node is not a mapping node")
+	}
+
+	var scalars []string
+	var datas []T
+	expectKey := true
+	for _, item := range node.Content {
+		if expectKey {
+			if item.Kind != yaml.ScalarNode {
+				return nil, nil, fmt.Errorf("not a valid scalar node: %v", item.Value)
+			}
+			scalars = append(scalars, item.Value)
+			expectKey = false
+		} else {
+			var val T
+			if err := item.Decode(&val); err != nil {
+				return nil, nil, err
+			}
+			datas = append(datas, val)
+			expectKey = true
+		}
+	}
+
+	if len(scalars) != len(datas) {
+		return nil, nil, fmt.Errorf("invalid definition of on: %v", node.Value)
+	}
+
+	return scalars, datas, nil
 }

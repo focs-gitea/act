@@ -220,3 +220,42 @@ func TestSingleWorkflow_SetJob(t *testing.T) {
 		assert.Equal(t, string(want), builder.String())
 	})
 }
+
+func TestParseMappingNode(t *testing.T) {
+	tests := []struct {
+		input  string
+		output struct {
+			scalars []string
+			datas   []interface{}
+		}
+	}{
+		{
+			input: "on:\n  push:\n    branches:\n      - master",
+			output: struct {
+				scalars []string
+				datas   []interface{}
+			}{
+				scalars: []string{"push"},
+				datas: []interface {
+				}{
+					map[string]interface{}{
+						"branches": []interface{}{"master"},
+					},
+				},
+			},
+		},
+		// todo more test case
+	}
+
+	for _, test := range tests {
+		t.Run(test.input, func(t *testing.T) {
+			workflow, err := model.ReadWorkflow(strings.NewReader(test.input))
+			assert.NoError(t, err)
+
+			scalars, datas, err := parseMappingNode[interface{}](&workflow.RawOn)
+			assert.NoError(t, err)
+			assert.EqualValues(t, test.output.scalars, scalars, fmt.Sprintf("%#v", scalars))
+			assert.EqualValues(t, test.output.datas, datas, fmt.Sprintf("%#v", datas))
+		})
+	}
+}
