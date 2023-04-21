@@ -4,5 +4,5 @@ jobs:
     name: job1
     runs-on: linux
     steps:
-      - run: echo job1
+      - run: echo job-1
       -
