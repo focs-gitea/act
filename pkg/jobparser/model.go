@@ -25,11 +25,22 @@ func (w *SingleWorkflow) Job() (string, *Job) {
 }
 
 func (w *SingleWorkflow) jobs() ([]string, []*Job, error) {
-	ids, datas, err := parseMappingNode[*Job](&w.RawJobs)
+	ids, jobs, err := parseMappingNode[*Job](&w.RawJobs)
 	if err != nil {
 		return nil, nil, err
 	}
-	return ids, datas, nil
+
+	for _, job := range jobs {
+		steps := make([]*Step, 0, len(job.Steps))
+		for _, s := range job.Steps {
+			if s != nil {
+				steps = append(steps, s)
+			}
+		}
+		job.Steps = steps
+	}
+
+	return ids, jobs, nil
 }
 
 func (w *SingleWorkflow) SetJob(id string, job *Job) error {
@@ -125,6 +136,9 @@ type Step struct {
 
 // String gets the name of step
 func (s *Step) String() string {
+	if s == nil {
+		return ""
+	}
 	return (&model.Step{
 		ID:   s.ID,
 		Name: s.Name,
@@ -140,6 +154,7 @@ type ContainerSpec struct {
 	Volumes     []string          `yaml:"volumes,omitempty"`
 	Options     string            `yaml:"options,omitempty"`
 	Credentials map[string]string `yaml:"credentials,omitempty"`
+	Cmd         []string          `yaml:"cmd,omitempty"`
 }
 
 type Strategy struct {
