@@ -262,7 +262,7 @@ func (rc *RunContext) startJobContainer() common.Executor {
 			}
 			username, password, err := rc.handleServiceCredentials(ctx, spec.Credentials)
 			if err != nil {
-				return fmt.Errorf("failed to handle service %s credentials: %s", name, err)
+				return fmt.Errorf("failed to handle service %s credentials: %w", name, err)
 			}
 			serviceContainerName := createSimpleContainerName(rc.jobContainerName(), name)
 			c := container.NewContainer(&container.NewContainerInput{
