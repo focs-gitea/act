@@ -260,25 +260,23 @@ func (rc *RunContext) startJobContainer() common.Executor {
 			for _, v := range spec.Cmd {
 				interpolatedCmd = append(interpolatedCmd, rc.ExprEval.Interpolate(ctx, v))
 			}
+			// get credentials
 			username, password, err := rc.handleServiceCredentials(ctx, spec.Credentials)
 			if err != nil {
 				return fmt.Errorf("failed to handle service %s credentials: %w", name, err)
 			}
+			// get binds and mounts
+			binds, mounts := rc.GetServiceBindsAndMounts(spec.Volumes)
 			serviceContainerName := createSimpleContainerName(rc.jobContainerName(), name)
 			c := container.NewContainer(&container.NewContainerInput{
-				Name:       serviceContainerName,
-				WorkingDir: ext.ToContainerPath(rc.Config.Workdir),
-				Image:      spec.Image,
-				Username:   username,
-				Password:   password,
-				Cmd:        interpolatedCmd,
-				Env:        envs,
-				Mounts: map[string]string{
-					// TODO merge volumes
-					name:            ext.ToContainerPath(rc.Config.Workdir),
-					"act-toolcache": "/toolcache",
-					"act-actions":   "/actions",
-				},
+				Name:           serviceContainerName,
+				WorkingDir:     ext.ToContainerPath(rc.Config.Workdir),
+				Image:          spec.Image,
+				Username:       username,
+				Password:       password,
+				Cmd:            interpolatedCmd,
+				Env:            envs,
+				Mounts:         mounts,
 				Binds:          binds,
 				Stdout:         logWriter,
 				Stderr:         logWriter,
@@ -994,4 +992,30 @@ func (rc *RunContext) handleServiceCredentials(ctx context.Context, creds map[st
 	}
 
 	return
+}
+
+// GetServiceBindsAndMounts get the binds and mounts for the service container, resolving paths as appopriate
+func (rc *RunContext) GetServiceBindsAndMounts(volumes []string) ([]string, map[string]string) {
+	if rc.Config.ContainerDaemonSocket == "" {
+		rc.Config.ContainerDaemonSocket = "/var/run/docker.sock"
+	}
+
+	binds := []string{
+		fmt.Sprintf("%s:%s", rc.Config.ContainerDaemonSocket, "/var/run/docker.sock"),
+	}
+
+	mounts := make(map[string]string)
+
+	for _, v := range volumes {
+		if !strings.Contains(v, ":") || filepath.IsAbs(v) {
+			// Bind anonymous volume or host file.
+			binds = append(binds, v)
+		} else {
+			// Mount existing volume.
+			paths := strings.SplitN(v, ":", 2)
+			mounts[paths[0]] = paths[1]
+		}
+	}
+
+	return binds, mounts
 }
