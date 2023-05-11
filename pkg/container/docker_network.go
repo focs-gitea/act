@@ -38,3 +38,14 @@ func NewDockerNetworkRemoveExecutor(name string) common.Executor {
 		return cli.NetworkRemove(ctx, name)
 	}
 }
+
+func NewDockerNetworkDisconnectExecutor(network, container string) common.Executor {
+	return func(ctx context.Context) error {
+		cli, err := GetDockerClient(ctx)
+		if err != nil {
+			return err
+		}
+
+		return cli.NetworkDisconnect(ctx, network, container, true)
+	}
+}

@@ -55,6 +55,7 @@ type Container interface {
 	Remove() common.Executor
 	Close() common.Executor
 	ReplaceLogWriter(io.Writer, io.Writer) (io.Writer, io.Writer)
+	DisconnectFromNetwork(name string) common.Executor
 }
 
 // NewDockerBuildExecutorInput the input for the NewDockerBuildExecutor function

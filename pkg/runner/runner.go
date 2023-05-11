@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"strings"
 	"time"
 
 	log "github.com/sirupsen/logrus"
@@ -75,6 +76,27 @@ func (c Config) GetToken() string {
 		token = c.Secrets["GITEA_TOKEN"]
 	}
 	return token
+}
+
+func (c Config) IsNetworkModeHost() bool {
+	return c.ContainerNetworkMode == "host"
+}
+
+func (c Config) IsNetworkModeNone() bool {
+	return c.ContainerNetworkMode == "none"
+}
+
+func (c Config) IsNetworkModeBridge() bool {
+	return c.ContainerNetworkMode == "bridge"
+}
+
+func (c Config) IsNetworkModeContainer() bool {
+	parts := strings.SplitN(string(c.ContainerNetworkMode), ":", 2)
+	return len(parts) > 1 && parts[0] == "container"
+}
+
+func (c Config) IsNetworkUserDefined() bool {
+	return !c.IsNetworkModeHost() && !c.IsNetworkModeNone() && !c.IsNetworkModeBridge() && !c.IsNetworkModeContainer()
 }
 
 type caller struct {

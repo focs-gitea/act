@@ -17,6 +17,7 @@ type jobInfo interface {
 	closeContainer() common.Executor
 	interpolateOutputs() common.Executor
 	result(result string)
+	disconnectContainerFromNetwork(network string) common.Executor
 }
 
 func newJobExecutor(info jobInfo, sf stepFactory, rc *RunContext) common.Executor {
@@ -115,20 +116,35 @@ func newJobExecutor(info jobInfo, sf stepFactory, rc *RunContext) common.Executo
 			ctx, cancel := context.WithTimeout(common.WithLogger(context.Background(), common.Logger(ctx)), time.Minute)
 			defer cancel()
 
+			var networkName string
+			if rc.Config.IsNetworkModeBridge() {
+				networkName = fmt.Sprintf("%s-network", rc.jobContainerName())
+			} else {
+				networkName = rc.Config.ContainerNetworkMode
+			}
+
 			logger := common.Logger(ctx)
 			logger.Infof("Cleaning up services for job %s", rc.JobName)
-			if err := rc.stopServiceContainers()(ctx); err != nil {
+			if err := rc.stopServiceContainers(networkName, true)(ctx); err != nil {
 				logger.Errorf("Error while cleaning services: %v", err)
 			}
 
 			logger.Infof("Cleaning up container for job %s", rc.JobName)
-			err = info.stopContainer()(ctx)
-
-			logger.Infof("Cleaning up network for job %s", rc.JobName)
-			networkName := fmt.Sprintf("%s-network", rc.jobContainerName())
-			if err := rc.removeNetwork(networkName)(ctx); err != nil {
-				logger.Errorf("Error while cleaning network: %v", err)
+			if err = info.disconnectContainerFromNetwork(networkName)(ctx); err != nil {
+				logger.Errorf("Error while disconnecting container from network: %v", err)
 			}
+			if err = info.stopContainer()(ctx); err != nil {
+				logger.Errorf("Error while stop job container: %v", err)
+			}
+
+			// if `container.network_mode` in config is `bridge`, remove the network which created by runner.
+			if rc.Config.IsNetworkModeBridge() {
+				logger.Infof("Cleaning up network for job %s", rc.JobName)
+				if err := rc.removeNetwork(networkName)(ctx); err != nil {
+					logger.Errorf("Error while cleaning network: %v", err)
+				}
+			}
+
 		}
 		setJobResult(ctx, info, rc, jobError == nil)
 		setJobOutputs(ctx, rc)
