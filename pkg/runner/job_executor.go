@@ -130,8 +130,10 @@ func newJobExecutor(info jobInfo, sf stepFactory, rc *RunContext) common.Executo
 			}
 
 			logger.Infof("Cleaning up container for job %s", rc.JobName)
-			if err = info.disconnectContainerFromNetwork(networkName)(ctx); err != nil {
-				logger.Errorf("Error while disconnecting container from network: %v", err)
+			if !rc.Config.IsNetworkModeHost() {
+				if err = info.disconnectContainerFromNetwork(networkName)(ctx); err != nil {
+					logger.Errorf("Error while disconnecting container from network: %v", err)
+				}
 			}
 			if err = info.stopContainer()(ctx); err != nil {
 				logger.Errorf("Error while stop job container: %v", err)
