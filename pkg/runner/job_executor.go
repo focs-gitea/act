@@ -124,13 +124,19 @@ func newJobExecutor(info jobInfo, sf stepFactory, rc *RunContext) common.Executo
 			}
 
 			logger := common.Logger(ctx)
+
+			// if `container.network_mode` in config is `bridge`,
+			// act_runner will create a new network automatically.
+			// So the network is also user defined network.
+			isUserDefinedNetwork := rc.Config.IsNetworkModeBridge() || rc.Config.IsNetworkUserDefined()
+
 			logger.Infof("Cleaning up services for job %s", rc.JobName)
-			if err := rc.stopServiceContainers(networkName, !rc.Config.IsNetworkModeHost())(ctx); err != nil {
+			if err := rc.stopServiceContainers(networkName, isUserDefinedNetwork)(ctx); err != nil {
 				logger.Errorf("Error while cleaning services: %v", err)
 			}
 
 			logger.Infof("Cleaning up container for job %s", rc.JobName)
-			if !rc.Config.IsNetworkModeHost() {
+			if isUserDefinedNetwork {
 				if err = info.disconnectContainerFromNetwork(networkName)(ctx); err != nil {
 					logger.Errorf("Error while disconnecting container from network: %v", err)
 				}
