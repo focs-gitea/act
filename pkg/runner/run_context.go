@@ -359,7 +359,7 @@ func (rc *RunContext) startJobContainer() common.Executor {
 			rc.stopJobContainer(),
 			func(ctx context.Context) error {
 				if !rc.Config.IsNetworkModeBridge() {
-					// If network mode is not bridge, we don't need to remove the network which created by act_runner
+					// If network mode is not bridge, we don't need to remove the network which is not created by act_runner
 					return nil
 				}
 				err := rc.removeNetwork(networkName)(ctx)
