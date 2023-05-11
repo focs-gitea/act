@@ -489,8 +489,9 @@ func (cr *containerReference) create(capAdd []string, capDrop []string) common.E
 		}
 
 		// For Gitea
+		// network-scoped alias is supported only for containers in user defined networks
 		var networkingConfig *network.NetworkingConfig
-		if input.NetworkMode != "" && len(input.NetworkAliases) > 0 {
+		if hostConfig.NetworkMode.IsUserDefined() && len(input.NetworkAliases) > 0 {
 			endpointConfig := &network.EndpointSettings{
 				Aliases: input.NetworkAliases,
 			}
