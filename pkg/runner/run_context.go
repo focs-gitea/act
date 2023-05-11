@@ -502,13 +502,13 @@ func (rc *RunContext) startServiceContainers(networkName string) common.Executor
 	}
 }
 
-func (rc *RunContext) stopServiceContainers(networkName string, notInitial bool) common.Executor {
+func (rc *RunContext) stopServiceContainers(networkName string, disconnectNetwork bool) common.Executor {
 	return func(ctx context.Context) error {
 		execs := []common.Executor{}
 		for _, c := range rc.ServiceContainers {
 			execs = append(execs, common.NewPipelineExecutor(
-				c.DisconnectFromNetwork(networkName).IfBool(notInitial),
-				c.Remove(),
+				// container cannot be disconnected from host network
+				c.DisconnectFromNetwork(networkName).IfBool(disconnectNetwork).Finally(c.Remove()),
 			))
 		}
 		return common.NewParallelExecutor(len(execs), execs...)(ctx)

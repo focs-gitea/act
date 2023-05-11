@@ -125,7 +125,7 @@ func newJobExecutor(info jobInfo, sf stepFactory, rc *RunContext) common.Executo
 
 			logger := common.Logger(ctx)
 			logger.Infof("Cleaning up services for job %s", rc.JobName)
-			if err := rc.stopServiceContainers(networkName, true)(ctx); err != nil {
+			if err := rc.stopServiceContainers(networkName, !rc.Config.IsNetworkModeHost())(ctx); err != nil {
 				logger.Errorf("Error while cleaning services: %v", err)
 			}
 
