@@ -508,7 +508,8 @@ func (rc *RunContext) stopServiceContainers(networkName string, disconnectNetwor
 		for _, c := range rc.ServiceContainers {
 			execs = append(execs, common.NewPipelineExecutor(
 				// container cannot be disconnected from host network
-				c.DisconnectFromNetwork(networkName).IfBool(disconnectNetwork).Finally(c.Remove()),
+				c.DisconnectFromNetwork(networkName).IfBool(disconnectNetwork).
+					Finally(c.Remove()),
 			))
 		}
 		return common.NewParallelExecutor(len(execs), execs...)(ctx)
