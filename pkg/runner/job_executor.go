@@ -117,10 +117,10 @@ func newJobExecutor(info jobInfo, sf stepFactory, rc *RunContext) common.Executo
 			defer cancel()
 
 			var networkName string
-			if rc.Config.IsNetworkModeBridge() {
+			if rc.Config.ContainerNetworkMode.IsBridge() {
 				networkName = fmt.Sprintf("%s-network", rc.jobContainerName())
 			} else {
-				networkName = rc.Config.ContainerNetworkMode
+				networkName = string(*rc.Config.ContainerNetworkMode)
 			}
 
 			logger := common.Logger(ctx)
@@ -128,7 +128,7 @@ func newJobExecutor(info jobInfo, sf stepFactory, rc *RunContext) common.Executo
 			// if `container.network_mode` in config is `bridge`,
 			// act_runner will create a new network automatically.
 			// So the network is also a user defined network.
-			isUserDefinedNetwork := rc.Config.IsNetworkModeBridge() || rc.Config.IsNetworkUserDefined()
+			isUserDefinedNetwork := rc.Config.ContainerNetworkMode.IsBridge() || rc.Config.ContainerNetworkMode.IsUserDefined()
 
 			logger.Infof("Cleaning up services for job %s", rc.JobName)
 			if err := rc.stopServiceContainers(networkName, isUserDefinedNetwork)(ctx); err != nil {
@@ -146,7 +146,7 @@ func newJobExecutor(info jobInfo, sf stepFactory, rc *RunContext) common.Executo
 			}
 
 			// if `container.network_mode` in config is `bridge`, remove the network which created by runner.
-			if rc.Config.IsNetworkModeBridge() {
+			if rc.Config.ContainerNetworkMode.IsBridge() {
 				logger.Infof("Cleaning up network for job %s", rc.JobName)
 				if err := rc.removeNetwork(networkName)(ctx); err != nil {
 					logger.Errorf("Error while cleaning network: %v", err)

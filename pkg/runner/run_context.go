@@ -263,10 +263,10 @@ func (rc *RunContext) startJobContainer() common.Executor {
 		binds, mounts := rc.GetBindsAndMounts()
 
 		var networkName string
-		if rc.Config.IsNetworkModeBridge() {
+		if rc.Config.ContainerNetworkMode.IsBridge() {
 			networkName = fmt.Sprintf("%s-network", rc.jobContainerName())
 		} else {
-			networkName = rc.Config.ContainerNetworkMode
+			networkName = string(*rc.Config.ContainerNetworkMode)
 		}
 
 		// add service containers
@@ -358,7 +358,7 @@ func (rc *RunContext) startJobContainer() common.Executor {
 			rc.stopServiceContainers(networkName, false),
 			rc.stopJobContainer(),
 			func(ctx context.Context) error {
-				if !rc.Config.IsNetworkModeBridge() {
+				if !rc.Config.ContainerNetworkMode.IsBridge() {
 					// If network mode is not bridge, we don't need to remove the network which is not created by act_runner
 					return nil
 				}
@@ -388,7 +388,7 @@ func (rc *RunContext) startJobContainer() common.Executor {
 
 func (rc *RunContext) createNetwork(name string) common.Executor {
 	return func(ctx context.Context) error {
-		if !rc.Config.IsNetworkModeBridge() {
+		if !rc.Config.ContainerNetworkMode.IsBridge() {
 			return nil
 		}
 		return container.NewDockerNetworkCreateExecutor(name)(ctx)

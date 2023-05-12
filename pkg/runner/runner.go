@@ -5,11 +5,11 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
-	"strings"
 	"time"
 
 	log "github.com/sirupsen/logrus"
 
+	docker_container "github.com/docker/docker/api/types/container"
 	"github.com/nektos/act/pkg/common"
 	"github.com/nektos/act/pkg/container"
 	"github.com/nektos/act/pkg/model"
@@ -58,15 +58,15 @@ type Config struct {
 	ReplaceGheActionTokenWithGithubCom string                     // Token of private action repo on GitHub.
 	Matrix                             map[string]map[string]bool // Matrix config to run
 
-	PresetGitHubContext   *model.GithubContext         // the preset github context, overrides some fields like DefaultBranch, Env, Secrets etc.
-	EventJSON             string                       // the content of JSON file to use for event.json in containers, overrides EventPath
-	ContainerNamePrefix   string                       // the prefix of container name
-	ContainerMaxLifetime  time.Duration                // the max lifetime of job containers
-	ContainerNetworkMode  string                       // the network mode of job containers
-	DefaultActionInstance string                       // the default actions web site
-	PlatformPicker        func(labels []string) string // platform picker, it will take precedence over Platforms if isn't nil
-	JobLoggerLevel        *log.Level                   // the level of job logger
-	Vars                  map[string]string            // the list of variables set at the repository, environment, or organization levels.
+	PresetGitHubContext   *model.GithubContext          // the preset github context, overrides some fields like DefaultBranch, Env, Secrets etc.
+	EventJSON             string                        // the content of JSON file to use for event.json in containers, overrides EventPath
+	ContainerNamePrefix   string                        // the prefix of container name
+	ContainerMaxLifetime  time.Duration                 // the max lifetime of job containers
+	ContainerNetworkMode  *docker_container.NetworkMode // the network mode of job containers
+	DefaultActionInstance string                        // the default actions web site
+	PlatformPicker        func(labels []string) string  // platform picker, it will take precedence over Platforms if isn't nil
+	JobLoggerLevel        *log.Level                    // the level of job logger
+	Vars                  map[string]string             // the list of variables set at the repository, environment, or organization levels.
 }
 
 // GetToken: Adapt to Gitea
@@ -76,27 +76,6 @@ func (c Config) GetToken() string {
 		token = c.Secrets["GITEA_TOKEN"]
 	}
 	return token
-}
-
-func (c Config) IsNetworkModeHost() bool {
-	return c.ContainerNetworkMode == "host"
-}
-
-func (c Config) IsNetworkModeNone() bool {
-	return c.ContainerNetworkMode == "none"
-}
-
-func (c Config) IsNetworkModeBridge() bool {
-	return c.ContainerNetworkMode == "bridge"
-}
-
-func (c Config) IsNetworkModeContainer() bool {
-	parts := strings.SplitN(string(c.ContainerNetworkMode), ":", 2)
-	return len(parts) > 1 && parts[0] == "container"
-}
-
-func (c Config) IsNetworkUserDefined() bool {
-	return !c.IsNetworkModeHost() && !c.IsNetworkModeNone() && !c.IsNetworkModeBridge() && !c.IsNetworkModeContainer()
 }
 
 type caller struct {
