@@ -127,7 +127,7 @@ func newJobExecutor(info jobInfo, sf stepFactory, rc *RunContext) common.Executo
 
 			// if `container.network_mode` in config is `bridge`,
 			// act_runner will create a new network automatically.
-			// So the network is also user defined network.
+			// So the network is also a user defined network.
 			isUserDefinedNetwork := rc.Config.IsNetworkModeBridge() || rc.Config.IsNetworkUserDefined()
 
 			logger.Infof("Cleaning up services for job %s", rc.JobName)
