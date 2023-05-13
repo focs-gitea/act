@@ -77,11 +77,6 @@ func (jim *jobInfoMock) result(result string) {
 	jim.Called(result)
 }
 
-func (jim *jobInfoMock) disconnectContainerFromNetwork(network string) common.Executor {
-	args := jim.Called(network)
-	return args.Get(0).(func(context.Context) error)
-}
-
 type jobContainerMock struct {
 	container.Container
 	container.LinuxContainerEnvironmentExtensions

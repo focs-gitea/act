@@ -58,15 +58,16 @@ type Config struct {
 	ReplaceGheActionTokenWithGithubCom string                     // Token of private action repo on GitHub.
 	Matrix                             map[string]map[string]bool // Matrix config to run
 
-	PresetGitHubContext   *model.GithubContext          // the preset github context, overrides some fields like DefaultBranch, Env, Secrets etc.
-	EventJSON             string                        // the content of JSON file to use for event.json in containers, overrides EventPath
-	ContainerNamePrefix   string                        // the prefix of container name
-	ContainerMaxLifetime  time.Duration                 // the max lifetime of job containers
-	ContainerNetworkMode  *docker_container.NetworkMode // the network mode of job containers
-	DefaultActionInstance string                        // the default actions web site
-	PlatformPicker        func(labels []string) string  // platform picker, it will take precedence over Platforms if isn't nil
-	JobLoggerLevel        *log.Level                    // the level of job logger
-	Vars                  map[string]string             // the list of variables set at the repository, environment, or organization levels.
+	PresetGitHubContext   *model.GithubContext         // the preset github context, overrides some fields like DefaultBranch, Env, Secrets etc.
+	EventJSON             string                       // the content of JSON file to use for event.json in containers, overrides EventPath
+	ContainerNamePrefix   string                       // the prefix of container name
+	ContainerMaxLifetime  time.Duration                // the max lifetime of job containers
+	ContainerNetworkMode  docker_container.NetworkMode // the network mode of job containers （the value of --network）
+	DefaultActionInstance string                       // the default actions web site
+	PlatformPicker        func(labels []string) string // platform picker, it will take precedence over Platforms if isn't nil
+	JobLoggerLevel        *log.Level                   // the level of job logger
+	Vars                  map[string]string            // the list of variables set at the repository, environment, or organization levels.
+	NeedCreateNetwork     bool                         // whether create a user defined network for job container and its service containers automatically.
 }
 
 // GetToken: Adapt to Gitea

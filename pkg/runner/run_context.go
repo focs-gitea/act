@@ -18,7 +18,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/docker/docker/errdefs"
 	"github.com/opencontainers/selinux/go-selinux"
 
 	"github.com/nektos/act/pkg/common"
@@ -262,15 +261,13 @@ func (rc *RunContext) startJobContainer() common.Executor {
 		ext := container.LinuxContainerEnvironmentExtensions{}
 		binds, mounts := rc.GetBindsAndMounts()
 
-		var networkName string
-		if rc.Config.ContainerNetworkMode.IsBridge() {
+		networkName := string(rc.Config.ContainerNetworkMode)
+		if rc.Config.NeedCreateNetwork {
 			networkName = fmt.Sprintf("%s-network", rc.jobContainerName())
-		} else {
-			networkName = string(*rc.Config.ContainerNetworkMode)
 		}
 
 		// add service containers
-		for name, spec := range rc.Run.Job().Services {
+		for serviceId, spec := range rc.Run.Job().Services {
 			// interpolate env
 			interpolatedEnvs := make(map[string]string, len(spec.Env))
 			for k, v := range spec.Env {
@@ -287,9 +284,9 @@ func (rc *RunContext) startJobContainer() common.Executor {
 			}
 			username, password, err := rc.handleServiceCredentials(ctx, spec.Credentials)
 			if err != nil {
-				return fmt.Errorf("failed to handle service %s credentials: %w", name, err)
+				return fmt.Errorf("failed to handle service %s credentials: %w", serviceId, err)
 			}
-			serviceContainerName := createSimpleContainerName(rc.jobContainerName(), name)
+			serviceContainerName := createSimpleContainerName(rc.jobContainerName(), serviceId)
 			c := container.NewContainer(&container.NewContainerInput{
 				Name:       serviceContainerName,
 				WorkingDir: ext.ToContainerPath(rc.Config.Workdir),
@@ -300,7 +297,7 @@ func (rc *RunContext) startJobContainer() common.Executor {
 				Env:        envs,
 				Mounts: map[string]string{
 					// TODO merge volumes
-					name:            ext.ToContainerPath(rc.Config.Workdir),
+					serviceId:       ext.ToContainerPath(rc.Config.Workdir),
 					"act-toolcache": "/toolcache",
 					"act-actions":   "/actions",
 				},
@@ -313,7 +310,7 @@ func (rc *RunContext) startJobContainer() common.Executor {
 				AutoRemove:     rc.Config.AutoRemove,
 				Options:        spec.Options,
 				NetworkMode:    networkName,
-				NetworkAliases: []string{name},
+				NetworkAliases: []string{serviceId},
 			})
 			rc.ServiceContainers = append(rc.ServiceContainers, c)
 		}
@@ -355,24 +352,10 @@ func (rc *RunContext) startJobContainer() common.Executor {
 		return common.NewPipelineExecutor(
 			rc.pullServicesImages(rc.Config.ForcePull),
 			rc.JobContainer.Pull(rc.Config.ForcePull),
-			rc.stopServiceContainers(networkName, false),
-			rc.stopJobContainer(),
-			func(ctx context.Context) error {
-				if !rc.Config.ContainerNetworkMode.IsBridge() {
-					// If network mode is not bridge, we don't need to remove the network which is not created by act_runner
-					return nil
-				}
-				err := rc.removeNetwork(networkName)(ctx)
-				if errdefs.IsNotFound(err) {
-					return nil
-				}
-				return err
-			},
-			rc.createNetwork(networkName),
+			rc.createNetwork(networkName).IfBool(rc.Config.NeedCreateNetwork),
 			rc.startServiceContainers(networkName),
 			rc.JobContainer.Create(rc.Config.ContainerCapAdd, rc.Config.ContainerCapDrop),
 			rc.JobContainer.Start(false),
-			// rc.JobContainer.ConnectToNetwork(networkName),
 			rc.JobContainer.Copy(rc.JobContainer.GetActPath()+"/", &container.FileEntry{
 				Name: "workflow/event.json",
 				Mode: 0o644,
@@ -388,9 +371,6 @@ func (rc *RunContext) startJobContainer() common.Executor {
 
 func (rc *RunContext) createNetwork(name string) common.Executor {
 	return func(ctx context.Context) error {
-		if !rc.Config.ContainerNetworkMode.IsBridge() {
-			return nil
-		}
 		return container.NewDockerNetworkCreateExecutor(name)(ctx)
 	}
 }
@@ -398,12 +378,6 @@ func (rc *RunContext) createNetwork(name string) common.Executor {
 func (rc *RunContext) removeNetwork(name string) common.Executor {
 	return func(ctx context.Context) error {
 		return container.NewDockerNetworkRemoveExecutor(name)(ctx)
-	}
-}
-
-func (rc *RunContext) disconnectNetwork(networkName, containerName string) common.Executor {
-	return func(ctx context.Context) error {
-		return container.NewDockerNetworkDisconnectExecutor(networkName, containerName)(ctx)
 	}
 }
 
@@ -495,30 +469,21 @@ func (rc *RunContext) startServiceContainers(networkName string) common.Executor
 				c.Pull(false),
 				c.Create(rc.Config.ContainerCapAdd, rc.Config.ContainerCapDrop),
 				c.Start(false),
-				// c.ConnectToNetwork(networkName),
 			))
 		}
 		return common.NewParallelExecutor(len(execs), execs...)(ctx)
 	}
 }
 
-func (rc *RunContext) stopServiceContainers(networkName string, disconnectNetwork bool) common.Executor {
+func (rc *RunContext) stopServiceContainers(networkName string) common.Executor {
 	return func(ctx context.Context) error {
 		execs := []common.Executor{}
 		for _, c := range rc.ServiceContainers {
 			execs = append(execs, common.NewPipelineExecutor(
-				// container cannot be disconnected from host network
-				c.DisconnectFromNetwork(networkName).IfBool(disconnectNetwork).
-					Finally(c.Remove()),
+				c.Remove(),
 			))
 		}
 		return common.NewParallelExecutor(len(execs), execs...)(ctx)
-	}
-}
-
-func (rc *RunContext) disconnectContainerFromNetwork(networkName string) common.Executor {
-	return func(ctx context.Context) error {
-		return rc.JobContainer.DisconnectFromNetwork(networkName)(ctx)
 	}
 }
 

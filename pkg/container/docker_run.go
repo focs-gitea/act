@@ -68,22 +68,6 @@ func (cr *containerReference) connectToNetwork(name string, aliases []string) co
 	}
 }
 
-func (cr *containerReference) DisconnectFromNetwork(network string) common.Executor {
-	return common.NewDebugExecutor("%sdocker network disconnect %s %s", logPrefix, network, cr.input.Name).
-		Then(
-			common.NewPipelineExecutor(
-				cr.connect(),
-				cr.disconnectFromNetwork(network),
-			).IfNot(common.Dryrun),
-		)
-}
-
-func (cr *containerReference) disconnectFromNetwork(network string) common.Executor {
-	return func(ctx context.Context) error {
-		return cr.cli.NetworkDisconnect(ctx, network, cr.input.Name, true)
-	}
-}
-
 // supportsContainerImagePlatform returns true if the underlying Docker server
 // API version is 1.41 and beyond
 func supportsContainerImagePlatform(ctx context.Context, cli client.APIClient) bool {
