@@ -475,7 +475,7 @@ func (rc *RunContext) startServiceContainers(networkName string) common.Executor
 	}
 }
 
-func (rc *RunContext) stopServiceContainers(networkName string) common.Executor {
+func (rc *RunContext) stopServiceContainers() common.Executor {
 	return func(ctx context.Context) error {
 		execs := []common.Executor{}
 		for _, c := range rc.ServiceContainers {
