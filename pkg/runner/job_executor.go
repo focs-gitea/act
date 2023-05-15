@@ -115,11 +115,6 @@ func newJobExecutor(info jobInfo, sf stepFactory, rc *RunContext) common.Executo
 			ctx, cancel := context.WithTimeout(common.WithLogger(context.Background(), common.Logger(ctx)), time.Minute)
 			defer cancel()
 
-			networkName := string(rc.Config.ContainerNetworkMode)
-			if rc.Config.NeedCreateNetwork {
-				networkName = fmt.Sprintf("%s-network", rc.jobContainerName())
-			}
-
 			logger := common.Logger(ctx)
 
 			logger.Infof("Cleaning up services for job %s", rc.JobName)
@@ -131,9 +126,12 @@ func newJobExecutor(info jobInfo, sf stepFactory, rc *RunContext) common.Executo
 			if err = info.stopContainer()(ctx); err != nil {
 				logger.Errorf("Error while stop job container: %v", err)
 			}
-
 			if rc.Config.NeedCreateNetwork {
+				// if the value of `NeedCreateNetwork` is true,
+				// the network to which containers are connecting is created by `act_runner`,
+				// so, we should remove the network at last.
 				logger.Infof("Cleaning up network for job %s", rc.JobName)
+				networkName := fmt.Sprintf("%s-network", rc.jobContainerName())
 				if err := rc.removeNetwork(networkName)(ctx); err != nil {
 					logger.Errorf("Error while cleaning network: %v", err)
 				}
