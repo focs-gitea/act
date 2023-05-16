@@ -89,6 +89,12 @@ func (rc *RunContext) jobContainerName() string {
 	return createSimpleContainerName(rc.Config.ContainerNamePrefix, "WORKFLOW-"+rc.Run.Workflow.Name, "JOB-"+rc.Name)
 }
 
+// networkName return the name of the network which will be created by `act` automatically for job,
+// only create network if `rc.Config.ContainerNetworkMode` is empty string.
+func (rc *RunContext) networkName() string {
+	return fmt.Sprintf("%s-network", rc.jobContainerName())
+}
+
 func getDockerDaemonSocketMountPath(daemonPath string) string {
 	if protoIndex := strings.Index(daemonPath, "://"); protoIndex != -1 {
 		scheme := daemonPath[:protoIndex]
@@ -263,10 +269,10 @@ func (rc *RunContext) startJobContainer() common.Executor {
 
 		// specify the network to which the container will connect when `docker create` stage. (like execute command line: docker create --network <networkName> <image>)
 		networkName := string(rc.Config.ContainerNetworkMode)
-		if rc.Config.NeedCreateNetwork {
-			// if the value of `NeedCreateNetwork` is true, will create a new network for the containers.
+		if networkName == "" {
+			// if networkName is empty string, will create a new network for the containers.
 			// and it will be removed after at last.
-			networkName = fmt.Sprintf("%s-network", rc.jobContainerName())
+			networkName = rc.networkName()
 		}
 
 		// add service containers
@@ -355,7 +361,7 @@ func (rc *RunContext) startJobContainer() common.Executor {
 		return common.NewPipelineExecutor(
 			rc.pullServicesImages(rc.Config.ForcePull),
 			rc.JobContainer.Pull(rc.Config.ForcePull),
-			rc.createNetwork(networkName).IfBool(rc.Config.NeedCreateNetwork), // if the value of `NeedCreateNetwork` is true, then will create a new network for containers.
+			rc.createNetwork(networkName).IfBool(rc.Config.ContainerNetworkMode == ""), // if the value of `NeedCreateNetwork` is true, then will create a new network for containers.
 			rc.startServiceContainers(networkName),
 			rc.JobContainer.Create(rc.Config.ContainerCapAdd, rc.Config.ContainerCapDrop),
 			rc.JobContainer.Start(false),

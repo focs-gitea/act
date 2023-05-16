@@ -67,7 +67,6 @@ type Config struct {
 	PlatformPicker        func(labels []string) string // platform picker, it will take precedence over Platforms if isn't nil
 	JobLoggerLevel        *log.Level                   // the level of job logger
 	Vars                  map[string]string            // the list of variables set at the repository, environment, or organization levels.
-	NeedCreateNetwork     bool                         // whether create a user defined network for job container and its service containers automatically.
 }
 
 // GetToken: Adapt to Gitea
