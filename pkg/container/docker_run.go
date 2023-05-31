@@ -403,7 +403,7 @@ func (cr *containerReference) mergeContainerConfigs(ctx context.Context, config 
 	binds := hostConfig.Binds
 	mounts := hostConfig.Mounts
 	networkMode := hostConfig.NetworkMode
-	err = mergo.Merge(hostConfig, containerConfig.HostConfig, mergo.WithOverride, mergo.WithAppendSlice)
+	err = mergo.Merge(hostConfig, containerConfig.HostConfig, mergo.WithOverride)
 	if err != nil {
 		return nil, nil, fmt.Errorf("Cannot merge container.HostConfig options: '%s': '%w'", input.Options, err)
 	}
