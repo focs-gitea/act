@@ -11,6 +11,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
+	"time"
 
 	gogit "github.com/go-git/go-git/v5"
 
@@ -18,6 +19,8 @@ import (
 	"github.com/nektos/act/pkg/common/git"
 	"github.com/nektos/act/pkg/model"
 )
+
+var detectActionClient = http.Client{Timeout: 5 * time.Second}
 
 type stepActionRemote struct {
 	Step                *model.Step
@@ -241,7 +244,7 @@ func (ra *remoteAction) IsCheckout() bool {
 func (ra *remoteAction) GetAvailableCloneURL(actionURLs []string) (string, error) {
 	for _, u := range actionURLs {
 		cloneURL := ra.CloneURL(u)
-		resp, err := http.Get(cloneURL)
+		resp, err := detectActionClient.Get(cloneURL)
 		if err != nil {
 			return "", err
 		}
