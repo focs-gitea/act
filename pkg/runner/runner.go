@@ -142,7 +142,9 @@ func (runner *runnerImpl) NewPlanExecutor(plan *model.Plan) common.Executor {
 				log.Debugf("Job.Env: %v", job.Env)
 				log.Debugf("Job.If: %v", job.If)
 				for step := range job.Steps {
-					log.Debugf("Job.Steps: %v", job.Steps[step].String())
+					if nil != job.Steps[step] {
+						log.Debugf("Job.Steps: %v", job.Steps[step].String())
+					}
 				}
 				log.Debugf("Job.TimeoutMinutes: %v", job.TimeoutMinutes)
 				log.Debugf("Job.Services: %v", job.Services)
@@ -153,7 +155,11 @@ func (runner *runnerImpl) NewPlanExecutor(plan *model.Plan) common.Executor {
 				log.Debugf("Job.Outputs: %v", job.Outputs)
 				log.Debugf("Job.Uses: %v", job.Uses)
 				log.Debugf("Job.With: %v", job.With)
+<<<<<<< HEAD
 				// log.Debugf("Job.RawSecrets: %v", job.RawSecrets)
+=======
+				//log.Debugf("Job.RawSecrets: %v", job.RawSecrets)
+>>>>>>> 38ef843 (Log incoming jobs.)
 				log.Debugf("Job.Result: %v", job.Result)
 
 				if job.Strategy != nil {
