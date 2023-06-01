@@ -441,6 +441,7 @@ func (j *Job) GetMatrixes() ([]map[string]interface{}, error) {
 		}
 	} else {
 		matrixes = append(matrixes, make(map[string]interface{}))
+		log.Debugf("Empty Strategy, matrixes=%v", matrixes)
 	}
 	return matrixes, nil
 }
