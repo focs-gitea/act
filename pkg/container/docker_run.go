@@ -896,7 +896,7 @@ func (cr *containerReference) sanitizeConfig(ctx context.Context, config *contai
 		for _, bind := range hostConfig.Binds {
 			parsed, err := loader.ParseVolume(bind)
 			if err != nil {
-				logger.Warn("parse volume [%s] error: %v", bind, err)
+				logger.Warnf("parse volume [%s] error: %v", bind, err)
 				continue
 			}
 			if parsed.Source == "" {
@@ -907,7 +907,7 @@ func (cr *containerReference) sanitizeConfig(ctx context.Context, config *contai
 			if _, ok := vv[parsed.Source]; ok {
 				sanitizedBinds = append(sanitizedBinds, bind)
 			} else {
-				logger.Warn("[%s] is not a valid volume, will be ignored", parsed.Source)
+				logger.Warnf("[%s] is not a valid volume, will be ignored", bind)
 			}
 		}
 		hostConfig.Binds = sanitizedBinds
@@ -917,7 +917,7 @@ func (cr *containerReference) sanitizeConfig(ctx context.Context, config *contai
 			if _, ok := vv[mt.Source]; ok {
 				sanitizedMounts = append(sanitizedMounts, mt)
 			} else {
-				logger.Warn("[%s] is not a valid volume, will be ignored", mt.Source)
+				logger.Warnf("[%s] is not a valid volume, will be ignored", mt.Source)
 			}
 		}
 		hostConfig.Mounts = sanitizedMounts
