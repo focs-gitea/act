@@ -886,36 +886,42 @@ func (cr *containerReference) wait() common.Executor {
 func (cr *containerReference) sanitizeConfig(ctx context.Context, config *container.Config, hostConfig *container.HostConfig) (*container.Config, *container.HostConfig) {
 	logger := common.Logger(ctx)
 
-	vv := make(map[string]struct{}, len(cr.input.ValidVolumes))
-	for _, volume := range cr.input.ValidVolumes {
-		vv[volume] = struct{}{}
+	if len(cr.input.ValidVolumes) > 0 {
+		vv := make(map[string]struct{}, len(cr.input.ValidVolumes))
+		for _, volume := range cr.input.ValidVolumes {
+			vv[volume] = struct{}{}
+		}
+		// sanitize binds
+		sanitizedBinds := make([]string, 0, len(hostConfig.Binds))
+		for _, bind := range hostConfig.Binds {
+			parsed, err := loader.ParseVolume(bind)
+			if err != nil {
+				logger.Warn("parse volume [%s] error: %v", bind, err)
+				continue
+			}
+			if parsed.Source == "" {
+				// anonymous volume
+				sanitizedBinds = append(sanitizedBinds, bind)
+				continue
+			}
+			if _, ok := vv[parsed.Source]; ok {
+				sanitizedBinds = append(sanitizedBinds, bind)
+			} else {
+				logger.Warn("[%s] is not a valid volume, will be ignored", parsed.Source)
+			}
+		}
+		hostConfig.Binds = sanitizedBinds
+		// sanitize mounts
+		sanitizedMounts := make([]mount.Mount, 0, len(hostConfig.Mounts))
+		for _, mt := range hostConfig.Mounts {
+			if _, ok := vv[mt.Source]; ok {
+				sanitizedMounts = append(sanitizedMounts, mt)
+			} else {
+				logger.Warn("[%s] is not a valid volume, will be ignored", mt.Source)
+			}
+		}
+		hostConfig.Mounts = sanitizedMounts
 	}
-
-	sanitizedBinds := make([]string, 0, len(hostConfig.Binds))
-	for _, bind := range hostConfig.Binds {
-		parsed, err := loader.ParseVolume(bind)
-		if err != nil {
-			logger.Warn("parse volume [%s] error: %v", bind, err)
-			continue
-		}
-		if parsed.Source == "" {
-			// anonymous volume
-			sanitizedBinds = append(sanitizedBinds, bind)
-			continue
-		}
-		if _, ok := vv[parsed.Source]; ok {
-			sanitizedBinds = append(sanitizedBinds, bind)
-		}
-	}
-	hostConfig.Binds = sanitizedBinds
-
-	sanitizedMounts := make([]mount.Mount, 0, len(hostConfig.Mounts))
-	for _, mt := range hostConfig.Mounts {
-		if _, ok := vv[mt.Source]; ok {
-			sanitizedMounts = append(sanitizedMounts, mt)
-		}
-	}
-	hostConfig.Mounts = sanitizedMounts
 
 	return config, hostConfig
 }
