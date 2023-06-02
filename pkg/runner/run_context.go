@@ -255,6 +255,7 @@ func (rc *RunContext) startJobContainer() common.Executor {
 
 		logger.Infof("\U0001f680  Start image=%s", image)
 		name := rc.jobContainerName()
+		rc.Env["JOB_CONTAINER_NAME"] = name
 
 		envList := make([]string, 0)
 
