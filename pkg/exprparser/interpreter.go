@@ -23,8 +23,6 @@ type EvaluationEnvironment struct {
 	Matrix   map[string]interface{}
 	Needs    map[string]Needs
 	Inputs   map[string]interface{}
-
-	Vars map[string]string
 }
 
 type Needs struct {
@@ -183,8 +181,6 @@ func (impl *interperterImpl) evaluateVariable(variableNode *actionlint.VariableN
 		return math.Inf(1), nil
 	case "nan":
 		return math.NaN(), nil
-	case "vars":
-		return impl.env.Vars, nil
 	default:
 		return nil, fmt.Errorf("Unavailable context: %s", variableNode.Name)
 	}
