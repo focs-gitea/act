@@ -82,6 +82,11 @@ func (rc *RunContext) GetEnv() map[string]string {
 		}
 	}
 	rc.Env["ACT"] = "true"
+
+	if !rc.Config.NoSkipCheckout {
+		rc.Env["ACT_SKIP_CHECKOUT"] = "true"
+	}
+
 	return rc.Env
 }
 
@@ -507,6 +512,9 @@ func (rc *RunContext) stopServiceContainers() common.Executor {
 
 // ActionCacheDir is for rc
 func (rc *RunContext) ActionCacheDir() string {
+	if rc.Config.ActionCacheDir != "" {
+		return rc.Config.ActionCacheDir
+	}
 	var xdgCache string
 	var ok bool
 	if xdgCache, ok = os.LookupEnv("XDG_CACHE_HOME"); !ok || xdgCache == "" {
@@ -544,8 +552,9 @@ func (rc *RunContext) startContainer() common.Executor {
 }
 
 func (rc *RunContext) IsHostEnv(ctx context.Context) bool {
-	image := rc.platformImage(ctx)
-	return strings.EqualFold(image, "-self-hosted")
+	platform := rc.runsOnImage(ctx)
+	image := rc.containerImage(ctx)
+	return image == "" && strings.EqualFold(platform, "-self-hosted")
 }
 
 func (rc *RunContext) stopContainer() common.Executor {
@@ -598,13 +607,19 @@ func (rc *RunContext) Executor() common.Executor {
 	}
 }
 
-func (rc *RunContext) platformImage(ctx context.Context) string {
+func (rc *RunContext) containerImage(ctx context.Context) string {
 	job := rc.Run.Job()
 
 	c := job.Container()
 	if c != nil {
 		return rc.ExprEval.Interpolate(ctx, c.Image)
 	}
+
+	return ""
+}
+
+func (rc *RunContext) runsOnImage(ctx context.Context) string {
+	job := rc.Run.Job()
 
 	if job.RunsOn() == nil {
 		common.Logger(ctx).Errorf("'runs-on' key not defined in %s", rc.String())
@@ -629,6 +644,14 @@ func (rc *RunContext) platformImage(ctx context.Context) string {
 	}
 
 	return ""
+}
+
+func (rc *RunContext) platformImage(ctx context.Context) string {
+	if containerImage := rc.containerImage(ctx); containerImage != "" {
+		return containerImage
+	}
+
+	return rc.runsOnImage(ctx)
 }
 
 func (rc *RunContext) options(ctx context.Context) string {
@@ -739,10 +762,6 @@ func (rc *RunContext) getStepsContext() map[string]*model.StepResult {
 	return rc.StepResults
 }
 
-func (rc *RunContext) getVarsContext() map[string]string {
-	return rc.Config.Vars
-}
-
 func (rc *RunContext) getGithubContext(ctx context.Context) *model.GithubContext {
 	logger := common.Logger(ctx)
 	ghc := &model.GithubContext{
@@ -813,6 +832,15 @@ func (rc *RunContext) getGithubContext(ctx context.Context) *model.GithubContext
 			ghc.Token = preset.Token
 			ghc.RepositoryOwner = preset.RepositoryOwner
 			ghc.RetentionDays = preset.RetentionDays
+
+			instance := rc.Config.GitHubInstance
+			if !strings.HasPrefix(instance, "http://") &&
+				!strings.HasPrefix(instance, "https://") {
+				instance = "https://" + instance
+			}
+			ghc.ServerURL = instance
+			ghc.APIURL = instance + "/api/v1" // the version of Gitea is v1
+			ghc.GraphQLURL = ""               // Gitea doesn't support graphql
 			return ghc
 		}
 	}
