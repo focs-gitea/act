@@ -225,15 +225,11 @@ type remoteAction struct {
 	Ref  string
 }
 
-func (ra *remoteAction) CloneURL(defaultURL string) string {
-	u := ra.URL
-	if u == "" {
-		u = defaultURL
+func (ra *remoteAction) CloneURL(URL string) string {
+	if !strings.HasPrefix(URL, "http://") && !strings.HasPrefix(URL, "https://") {
+		URL = "https://" + URL
 	}
-	if !strings.HasPrefix(u, "http://") && !strings.HasPrefix(u, "https://") {
-		u = "https://" + u
-	}
-	return fmt.Sprintf("%s/%s/%s", u, ra.Org, ra.Repo)
+	return fmt.Sprintf("%s/%s/%s", URL, ra.Org, ra.Repo)
 }
 
 func (ra *remoteAction) IsCheckout() bool {
@@ -244,6 +240,9 @@ func (ra *remoteAction) IsCheckout() bool {
 }
 
 func (ra *remoteAction) GetAvailableCloneURL(actionURLs []string) (string, error) {
+	if ra.URL != "" {
+		actionURLs = append([]string{ra.URL}, actionURLs...)
+	}
 	for _, u := range actionURLs {
 		cloneURL := ra.CloneURL(u)
 		resp, err := detectActionClient.Get(cloneURL)
@@ -254,6 +253,12 @@ func (ra *remoteAction) GetAvailableCloneURL(actionURLs []string) (string, error
 
 		switch resp.StatusCode {
 		case http.StatusOK:
+			// TODO
+			// 1. login page returns 200 so runner things that repository exists
+			// 2. use auth token to access private repository so no need to check login
+			if strings.Contains(resp.Request.URL.String(), "login") {
+				continue
+			}
 			return cloneURL, nil
 		case http.StatusNotFound:
 			continue
