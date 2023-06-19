@@ -49,8 +49,6 @@ func (sar *stepActionRemote) prepareActionExecutor() common.Executor {
 		}
 
 		github := sar.getGithubContext(ctx)
-		sar.remoteAction.URL = github.ServerURL
-
 		if sar.remoteAction.IsCheckout() && isLocalCheckout(github, sar.Step) && !sar.RunContext.Config.NoSkipCheckout {
 			common.Logger(ctx).Debugf("Skipping local actions/checkout because workdir was already copied")
 			return nil
@@ -241,7 +239,7 @@ func (ra *remoteAction) IsCheckout() bool {
 
 func (ra *remoteAction) GetAvailableCloneURL(actionURLs []string) (string, error) {
 	if ra.URL != "" {
-		actionURLs = append([]string{ra.URL}, actionURLs...)
+		return ra.CloneURL(ra.URL), nil
 	}
 	for _, u := range actionURLs {
 		cloneURL := ra.CloneURL(u)
@@ -254,10 +252,13 @@ func (ra *remoteAction) GetAvailableCloneURL(actionURLs []string) (string, error
 		switch resp.StatusCode {
 		case http.StatusOK:
 			// TODO
-			// 1. login page returns 200 so runner things that repository exists
+			// 1. gitea login page returns 200 so runner things that repository exists
 			// 2. use auth token to access private repository so no need to check login
-			if strings.Contains(resp.Request.URL.String(), "login") {
-				continue
+			if resp.Request.Response != nil && resp.Request.Response.StatusCode == http.StatusSeeOther {
+				location, _ := resp.Request.Response.Location()
+				if location.Path == "/user/login" {
+					continue
+				}
 			}
 			return cloneURL, nil
 		case http.StatusNotFound:
