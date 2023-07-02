@@ -215,6 +215,10 @@ type remoteAction struct {
 }
 
 func (ra *remoteAction) CloneURL(u string) string {
+	if ra.URL != "" {
+		return ra.URL
+	}
+	
 	if !strings.HasPrefix(u, "http://") && !strings.HasPrefix(u, "https://") {
 		u = "https://" + u
 	}
