@@ -69,6 +69,7 @@ type Config struct {
 	PlatformPicker        func(labels []string) string // platform picker, it will take precedence over Platforms if isn't nil
 	JobLoggerLevel        *log.Level                   // the level of job logger
 	ValidVolumes          []string                     // only volumes (and bind mounts) in this slice can be mounted on the job container or service containers
+	InheritDiverOpts      []string                     // the network created by act_runner whether inherit the dirver options of the default bridge network
 }
 
 // GetToken: Adapt to Gitea
