@@ -9,7 +9,7 @@ import (
 	"github.com/nektos/act/pkg/common"
 )
 
-func NewDockerNetworkCreateExecutor(name string, inheritDiverOpts []string) common.Executor {
+func NewDockerNetworkCreateExecutor(name string, inheritDriverOpts []string) common.Executor {
 	return func(ctx context.Context) error {
 		cli, err := GetDockerClient(ctx)
 		if err != nil {
@@ -21,13 +21,13 @@ func NewDockerNetworkCreateExecutor(name string, inheritDiverOpts []string) comm
 			Scope:  "local",
 		}
 
-		if len(inheritDiverOpts) > 0 {
-			createOpts.Options = make(map[string]string, len(inheritDiverOpts))
+		if len(inheritDriverOpts) > 0 {
 			network, err := cli.NetworkInspect(ctx, "bridge", types.NetworkInspectOptions{Scope: "local"})
 			if err != nil {
 				return err
 			}
-			for _, optKey := range inheritDiverOpts {
+			createOpts.Options = make(map[string]string, len(inheritDriverOpts))
+			for _, optKey := range inheritDriverOpts {
 				if val, ok := network.Options[optKey]; ok {
 					createOpts.Options[optKey] = val
 				}
