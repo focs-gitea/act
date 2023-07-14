@@ -64,9 +64,6 @@ func (sar *stepActionRemote) prepareActionExecutor() common.Executor {
 		}
 
 		actionDir := fmt.Sprintf("%s/%s", sar.RunContext.ActionCacheDir(), safeFilename(sar.Step.Uses))
-
-		fmt.Println("Ref", sar.remoteAction.Ref)
-		fmt.Println("Dir", actionDir)
 		gitClone := stepActionRemoteNewCloneExecutor(git.NewGitCloneExecutorInput{
 			URL:   sar.remoteAction.CloneURL(sar.RunContext.Config.DefaultActionInstance),
 			Ref:   sar.remoteAction.Ref,
