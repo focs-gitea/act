@@ -2,7 +2,6 @@ package jobparser
 
 import (
 	"fmt"
-
 	"github.com/nektos/act/pkg/model"
 	"gopkg.in/yaml.v3"
 )
@@ -163,6 +162,18 @@ type Strategy struct {
 	RawMatrix         yaml.Node `yaml:"matrix,omitempty"`
 }
 
+type WorkflowDispatchInputConfig struct {
+	Description string   `yaml:"description,omitempty"`
+	Required    bool     `yaml:"required,omitempty"`
+	Default     string   `yaml:"default,omitempty"`
+	Type        string   `yaml:"type,omitempty"`
+	Options     []string `yaml:"options,omitempty"`
+}
+
+type WorkflowDispatch struct {
+	Inputs map[string]WorkflowDispatchInputConfig `yaml:"inputs,omitempty"`
+}
+
 type Defaults struct {
 	Run RunDefaults `yaml:"run,omitempty"`
 }
@@ -173,9 +184,10 @@ type RunDefaults struct {
 }
 
 type Event struct {
-	Name      string
-	acts      map[string][]string
-	schedules []map[string]string
+	Name             string
+	acts             map[string][]string
+	schedules        []map[string]string
+	workflowDispatch *WorkflowDispatch
 }
 
 func (evt *Event) IsSchedule() bool {
@@ -218,58 +230,40 @@ func ParseRawOn(rawOn *yaml.Node) ([]*Event, error) {
 		}
 		return res, nil
 	case yaml.MappingNode:
-		events, triggers, err := parseMappingNode[interface{}](rawOn)
-		if err != nil {
-			return nil, err
-		}
-		res := make([]*Event, 0, len(events))
-		for i, k := range events {
-			v := triggers[i]
-			if v == nil {
-				res = append(res, &Event{
-					Name: k,
-					acts: map[string][]string{},
-				})
+		res := make([]*Event, 0, len(rawOn.Content))
+
+		expectKey := true
+		var k string
+		var v interface{}
+		for _, item := range rawOn.Content {
+			if expectKey {
+				if item.Kind != yaml.ScalarNode {
+					return nil, fmt.Errorf("not a valid scalar node: %v", item.Value)
+				}
+				k = item.Value
+				expectKey = false
 				continue
+			} else {
+				if err := item.Decode(&v); err != nil {
+					return nil, err
+				}
+				expectKey = true
 			}
-			switch t := v.(type) {
-			case string:
-				res = append(res, &Event{
-					Name: k,
-					acts: map[string][]string{},
-				})
-			case []string:
-				res = append(res, &Event{
-					Name: k,
-					acts: map[string][]string{},
-				})
-			case map[string]interface{}:
-				acts := make(map[string][]string, len(t))
-				for act, branches := range t {
-					switch b := branches.(type) {
-					case string:
-						acts[act] = []string{b}
-					case []string:
-						acts[act] = b
-					case []interface{}:
-						acts[act] = make([]string, len(b))
-						for i, v := range b {
-							var ok bool
-							if acts[act][i], ok = v.(string); !ok {
-								return nil, fmt.Errorf("unknown on type: %#v", branches)
-							}
-						}
-					default:
-						return nil, fmt.Errorf("unknown on type: %#v", branches)
-					}
+
+			switch k {
+			case "workflow_dispatch":
+				workflowDispatch := &WorkflowDispatch{}
+				if err := item.Decode(&workflowDispatch); err != nil {
+					return nil, err
 				}
 				res = append(res, &Event{
-					Name: k,
-					acts: acts,
+					Name:             k,
+					workflowDispatch: workflowDispatch,
 				})
-			case []interface{}:
-				if k != "schedule" {
-					return nil, fmt.Errorf("unknown on type: %#v", v)
+			case "schedule":
+				t, ok := v.([]interface{})
+				if !ok {
+					return nil, fmt.Errorf("on schedule event, unknown type: %#v", v)
 				}
 				schedules := make([]map[string]string, len(t))
 				for i, tt := range t {
@@ -290,7 +284,51 @@ func ParseRawOn(rawOn *yaml.Node) ([]*Event, error) {
 					schedules: schedules,
 				})
 			default:
-				return nil, fmt.Errorf("unknown on type: %#v", v)
+				if v == nil {
+					res = append(res, &Event{
+						Name: k,
+						acts: map[string][]string{},
+					})
+					continue
+				}
+				switch t := v.(type) {
+				case string:
+					res = append(res, &Event{
+						Name: k,
+						acts: map[string][]string{},
+					})
+				case []string:
+					res = append(res, &Event{
+						Name: k,
+						acts: map[string][]string{},
+					})
+				case map[string]interface{}:
+					acts := make(map[string][]string, len(t))
+					for act, branches := range t {
+						switch b := branches.(type) {
+						case string:
+							acts[act] = []string{b}
+						case []string:
+							acts[act] = b
+						case []interface{}:
+							acts[act] = make([]string, len(b))
+							for i, v := range b {
+								var ok bool
+								if acts[act][i], ok = v.(string); !ok {
+									return nil, fmt.Errorf("unknown on type: %#v", branches)
+								}
+							}
+						default:
+							return nil, fmt.Errorf("unknown on type: %#v", branches)
+						}
+					}
+					res = append(res, &Event{
+						Name: k,
+						acts: acts,
+					})
+				default:
+					return nil, fmt.Errorf("unknown on type: %#v", v)
+				}
 			}
 		}
 		return res, nil

@@ -174,6 +174,39 @@ func TestParseRawOn(t *testing.T) {
 			},
 		},
 		{
+			input: "on:\n  workflow_dispatch:\n    inputs:\n      logLevel:\n        description: 'Log level'\n        required: true\n        default: 'warning'\n        type: choice\n        options:\n        - info\n        - warning\n        - debug\n      tags:\n        description: 'Test scenario tags'\n        required: false\n        type: boolean\n      environment:\n        description: 'Environment to run tests against'\n        type: environment\n        required: true",
+			result: []*Event{
+				{
+					Name: "workflow_dispatch",
+					workflowDispatch: &WorkflowDispatch{
+						Inputs: map[string]WorkflowDispatchInputConfig{
+							"logLevel": {
+								Description: "Log level",
+								Required:    true,
+								Default:     "warning",
+								Type:        "choice",
+								Options: []string{
+									"info",
+									"warning",
+									"debug",
+								},
+							},
+							"tags": {
+								Description: "Test scenario tags",
+								Required:    false,
+								Type:        "boolean",
+							},
+							"environment": {
+								Description: "Environment to run tests against",
+								Type:        "environment",
+								Required:    true,
+							},
+						},
+					},
+				},
+			},
+		},
+		{
 			input: "on:\n  schedule:\n    - cron: '20 6 * * *'",
 			result: []*Event{
 				{
