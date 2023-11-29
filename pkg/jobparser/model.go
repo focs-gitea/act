@@ -202,6 +202,10 @@ func (evt *Event) Schedules() []map[string]string {
 	return evt.schedules
 }
 
+func (evt *Event) WorkflowDispatch() *WorkflowDispatch {
+	return evt.workflowDispatch
+}
+
 func ParseRawOn(rawOn *yaml.Node) ([]*Event, error) {
 	switch rawOn.Kind {
 	case yaml.ScalarNode:
