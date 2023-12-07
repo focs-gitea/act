@@ -113,12 +113,12 @@ func (w *Workflow) WorkflowDispatchConfig() *WorkflowDispatch {
 	}
 
 	var config WorkflowDispatch
-	node := val["workflow_dispatch"]
-	if !decodeNode(node, &config) {
-		return nil
+	node, found := val["workflow_dispatch"]
+	if found && decodeNode(node, &config) {
+		return &config
 	}
 
-	return &config
+	return nil
 }
 
 type WorkflowCallInput struct {
