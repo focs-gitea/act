@@ -103,21 +103,10 @@ type WorkflowDispatch struct {
 }
 
 func (w *Workflow) WorkflowDispatchConfig() *WorkflowDispatch {
-	if w.RawOn.Kind != yaml.MappingNode {
-		return nil
+	var workflowDispatch WorkflowDispatch
+	if findNode(w.RawOn, "workflow_dispatch", &workflowDispatch) {
+		return &workflowDispatch
 	}
-
-	var val map[string]yaml.Node
-	if !decodeNode(w.RawOn, &val) {
-		return nil
-	}
-
-	var config WorkflowDispatch
-	node, found := val["workflow_dispatch"]
-	if found && decodeNode(node, &config) {
-		return &config
-	}
-
 	return nil
 }
 
@@ -143,23 +132,11 @@ type WorkflowCallResult struct {
 }
 
 func (w *Workflow) WorkflowCallConfig() *WorkflowCall {
-	if w.RawOn.Kind != yaml.MappingNode {
-		// The callers expect for "on: workflow_call" and "on: [ workflow_call ]" a non nil return value
-		return &WorkflowCall{}
+	var workflowCall WorkflowCall
+	if findNode(w.RawOn, "workflow_call", &workflowCall) {
+		return &workflowCall
 	}
-
-	var val map[string]yaml.Node
-	if !decodeNode(w.RawOn, &val) {
-		return &WorkflowCall{}
-	}
-
-	var config WorkflowCall
-	node := val["workflow_call"]
-	if !decodeNode(node, &config) {
-		return &WorkflowCall{}
-	}
-
-	return &config
+	return nil
 }
 
 // Job is the structure of one job in a workflow
@@ -718,4 +695,38 @@ func decodeNode(node yaml.Node, out interface{}) bool {
 		return false
 	}
 	return true
+}
+
+func findNode(node yaml.Node, targetKey string, out interface{}) bool {
+	switch node.Kind {
+	case yaml.ScalarNode:
+		var val string
+		err := node.Decode(&val)
+		if err != nil {
+			log.Fatal(err)
+			return false
+		}
+		if val == targetKey {
+			return true
+		}
+	case yaml.SequenceNode:
+		for _, n := range node.Content {
+			if findNode(*n, targetKey, out) {
+				return true
+			}
+		}
+	case yaml.MappingNode:
+		var val map[string]yaml.Node
+		if !decodeNode(node, &val) {
+			return false
+		}
+
+		n, found := val[targetKey]
+		if found && decodeNode(n, out) {
+			return true
+		}
+	default:
+		return false
+	}
+	return false
 }
