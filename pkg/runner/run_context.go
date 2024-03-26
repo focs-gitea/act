@@ -95,10 +95,11 @@ func (rc *RunContext) jobContainerName() string {
 	return createSimpleContainerName(rc.Config.ContainerNamePrefix, "WORKFLOW-"+rc.Run.Workflow.Name, "JOB-"+rc.Name)
 }
 
+// Deprecated: use `networkNameForGitea`
 // networkName return the name of the network which will be created by `act` automatically for job,
 // only create network if using a service container
 func (rc *RunContext) networkName() (string, bool) {
-	if len(rc.Run.Job().Services) >= 0 { // For Gitea, always create network
+	if len(rc.Run.Job().Services) > 0 {
 		return fmt.Sprintf("%s-%s-network", rc.jobContainerName(), rc.Run.JobID), true
 	}
 	if rc.Config.ContainerNetworkMode == "" {
