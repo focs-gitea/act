@@ -221,10 +221,14 @@ func findGitSlug(url string, githubInstance string) (string, string, error) {
 
 // NewGitCloneExecutorInput the input for the NewGitCloneExecutor
 type NewGitCloneExecutorInput struct {
-	URL   string
-	Ref   string
-	Dir   string
-	Token string
+	URL         string
+	Ref         string
+	Dir         string
+	Token       string
+	OfflineMode bool
+
+	// For Gitea
+	InsecureSkipTLS bool
 }
 
 // CloneIfRequired ...
@@ -246,6 +250,8 @@ func CloneIfRequired(ctx context.Context, refName plumbing.ReferenceName, input 
 		cloneOptions := git.CloneOptions{
 			URL:      input.URL,
 			Progress: progressWriter,
+
+			InsecureSkipTLS: input.InsecureSkipTLS, // For Gitea
 		}
 		if input.Token != "" {
 			cloneOptions.Auth = &http.BasicAuth{
@@ -302,12 +308,21 @@ func NewGitCloneExecutor(input NewGitCloneExecutorInput) common.Executor {
 			return err
 		}
 
+		isOfflineMode := input.OfflineMode
+
 		// fetch latest changes
 		fetchOptions, pullOptions := gitOptions(input.Token)
 
-		err = r.Fetch(&fetchOptions)
-		if err != nil && !errors.Is(err, git.NoErrAlreadyUpToDate) {
-			return err
+		if input.InsecureSkipTLS { // For Gitea
+			fetchOptions.InsecureSkipTLS = true
+			pullOptions.InsecureSkipTLS = true
+		}
+
+		if !isOfflineMode {
+			err = r.Fetch(&fetchOptions)
+			if err != nil && !errors.Is(err, git.NoErrAlreadyUpToDate) {
+				return err
+			}
 		}
 
 		var hash *plumbing.Hash
@@ -367,9 +382,10 @@ func NewGitCloneExecutor(input NewGitCloneExecutorInput) common.Executor {
 				return err
 			}
 		}
-
-		if err = w.Pull(&pullOptions); err != nil && err != git.NoErrAlreadyUpToDate {
-			logger.Debugf("Unable to pull %s: %v", refName, err)
+		if !isOfflineMode {
+			if err = w.Pull(&pullOptions); err != nil && err != git.NoErrAlreadyUpToDate {
+				logger.Debugf("Unable to pull %s: %v", refName, err)
+			}
 		}
 		logger.Debugf("Cloned %s to %s", input.URL, input.Dir)
 
