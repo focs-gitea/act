@@ -109,11 +109,16 @@ func (sar *stepActionRemote) prepareActionExecutor() common.Executor {
 		}
 
 		actionDir := fmt.Sprintf("%s/%s", sar.RunContext.ActionCacheDir(), safeFilename(sar.Step.Uses))
+
+		actionURL := sar.remoteAction.CloneURL(sar.RunContext.Config.DefaultActionInstance)
+		actionToken := sar.RunContext.Config.DefaultActionToken
+
 		gitClone := stepActionRemoteNewCloneExecutor(git.NewGitCloneExecutorInput{
-			URL:   sar.remoteAction.CloneURL(sar.RunContext.Config.DefaultActionInstance),
+			URL:   actionURL,
 			Ref:   sar.remoteAction.Ref,
 			Dir:   actionDir,
-			Token: "", /*
+			Token: actionToken,
+			/*
 				Shouldn't provide token when cloning actions,
 				the token comes from the instance which triggered the task,
 				however, it might be not the same instance which provides actions.
