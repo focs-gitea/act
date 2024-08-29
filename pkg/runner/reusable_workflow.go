@@ -73,12 +73,25 @@ func newRemoteReusableWorkflowExecutor(rc *RunContext) common.Executor {
 	filename := fmt.Sprintf("%s/%s@%s", remoteReusableWorkflow.Org, remoteReusableWorkflow.Repo, remoteReusableWorkflow.Ref)
 	workflowDir := fmt.Sprintf("%s/%s", rc.ActionCacheDir(), safeFilename(filename))
 
+	logger := common.Logger(context.Background())
 	if rc.Config.ActionCache != nil {
+		logger.Debugf("Using action cache for %s", filename)
 		return newActionCacheReusableWorkflowExecutor(rc, filename, remoteReusableWorkflow)
 	}
 
-	// FIXME: if the reusable workflow is from a private repository, we need to provide a token to access the repository.
-	token := ""
+	// if the reusable workflow is from a private repository, we need to provide a token to access the repository.
+	// rc.Config.GetToken() is for current repo, but we need the token has access to the reusable workflow repo.
+	var token string
+	if secrets := getWorkflowSecrets(context.Background(), rc); secrets != nil {
+		if tk, ok := secrets["CI_REMOTE_WORKFLOW_TOKEN"]; ok && tk != "" {
+			token = tk
+			logger.Debugf("Using token from CI_REMOTE_WORKFLOW_TOKEN secret %s for url %s", token, uses)
+		}
+	}
+	if token == "" {
+		logger.Debugf("No token provided for %s, please set CI_REMOTE_WORKFLOW_TOKEN secret "+
+			"if the reusable workflow is from a private repository", uses)
+	}
 
 	return common.NewPipelineExecutor(
 		newMutexExecutor(cloneIfRequired(rc, *remoteReusableWorkflow, workflowDir, token)),
