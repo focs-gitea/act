@@ -240,7 +240,7 @@ func TestActionRunner(t *testing.T) {
 
 			tt.step.getRunContext().JobContainer = cm
 
-			err := runActionImpl(tt.step, "dir", newRemoteAction("org/repo/path@ref"))(ctx)
+			err := runActionImpl(tt.step, "dir", newRemoteAction("https://gitea.com", "org/repo/path@ref"))(ctx)
 
 			assert.Nil(t, err)
 			cm.AssertExpectations(t)

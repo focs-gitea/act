@@ -126,7 +126,7 @@ func TestStepActionRemote(t *testing.T) {
 
 			clonedAction := false
 
-			origStepAtionRemoteNewCloneExecutor := stepActionRemoteNewCloneExecutor
+			origStepActionRemoteNewCloneExecutor := stepActionRemoteNewCloneExecutor
 			stepActionRemoteNewCloneExecutor = func(input git.NewGitCloneExecutorInput) common.Executor {
 				return func(ctx context.Context) error {
 					clonedAction = true
@@ -134,7 +134,7 @@ func TestStepActionRemote(t *testing.T) {
 				}
 			}
 			defer (func() {
-				stepActionRemoteNewCloneExecutor = origStepAtionRemoteNewCloneExecutor
+				stepActionRemoteNewCloneExecutor = origStepActionRemoteNewCloneExecutor
 			})()
 
 			sar := &stepActionRemote{
@@ -169,7 +169,7 @@ func TestStepActionRemote(t *testing.T) {
 				sarm.On("readAction", sar.Step, suffixMatcher("act/remote-action@v1"), "", mock.Anything, mock.Anything).Return(&model.Action{}, nil)
 			}
 			if tt.mocks.run {
-				sarm.On("runAction", sar, suffixMatcher("act/remote-action@v1"), newRemoteAction(sar.Step.Uses)).Return(func(ctx context.Context) error { return tt.runError })
+				sarm.On("runAction", sar, suffixMatcher("act/remote-action@v1"), newRemoteAction("https://gitea.com", sar.Step.Uses)).Return(func(ctx context.Context) error { return tt.runError })
 
 				cm.On("Copy", "/var/run/act", mock.AnythingOfType("[]*container.FileEntry")).Return(func(ctx context.Context) error {
 					return nil
@@ -618,12 +618,14 @@ func TestStepActionRemotePost(t *testing.T) {
 
 func Test_newRemoteAction(t *testing.T) {
 	tests := []struct {
-		action       string
-		want         *remoteAction
-		wantCloneURL string
+		action        string
+		serverBaseURL string
+		want          *remoteAction
+		wantCloneURL  string
 	}{
 		{
-			action: "actions/heroku@main",
+			action:        "actions/heroku@main",
+			serverBaseURL: "https://github.com",
 			want: &remoteAction{
 				URL:  "",
 				Org:  "actions",
@@ -634,7 +636,8 @@ func Test_newRemoteAction(t *testing.T) {
 			wantCloneURL: "https://github.com/actions/heroku",
 		},
 		{
-			action: "actions/aws/ec2@main",
+			action:        "actions/aws/ec2@main",
+			serverBaseURL: "https://github.com",
 			want: &remoteAction{
 				URL:  "",
 				Org:  "actions",
@@ -653,7 +656,8 @@ func Test_newRemoteAction(t *testing.T) {
 			want:   nil,
 		},
 		{
-			action: "https://gitea.com/actions/heroku@main", // it's invalid for GitHub, but gitea supports it
+			action:        "https://gitea.com/actions/heroku@main", // it's invalid for GitHub, but gitea supports it
+			serverBaseURL: "https://gitea.com",
 			want: &remoteAction{
 				URL:  "https://gitea.com",
 				Org:  "actions",
@@ -664,7 +668,8 @@ func Test_newRemoteAction(t *testing.T) {
 			wantCloneURL: "https://gitea.com/actions/heroku",
 		},
 		{
-			action: "https://gitea.com/actions/aws/ec2@main", // it's invalid for GitHub, but gitea supports it
+			action:        "https://gitea.com/actions/aws/ec2@main", // it's invalid for GitHub, but gitea supports it
+			serverBaseURL: "https://gitea.com",
 			want: &remoteAction{
 				URL:  "https://gitea.com",
 				Org:  "actions",
@@ -675,7 +680,8 @@ func Test_newRemoteAction(t *testing.T) {
 			wantCloneURL: "https://gitea.com/actions/aws",
 		},
 		{
-			action: "http://gitea.com/actions/heroku@main", // it's invalid for GitHub, but gitea supports it
+			action:        "http://gitea.com/actions/heroku@main", // it's invalid for GitHub, but gitea supports it
+			serverBaseURL: "http://gitea.com",
 			want: &remoteAction{
 				URL:  "http://gitea.com",
 				Org:  "actions",
@@ -686,7 +692,8 @@ func Test_newRemoteAction(t *testing.T) {
 			wantCloneURL: "http://gitea.com/actions/heroku",
 		},
 		{
-			action: "http://gitea.com/actions/aws/ec2@main", // it's invalid for GitHub, but gitea supports it
+			action:        "http://gitea.com/actions/aws/ec2@main", // it's invalid for GitHub, but gitea supports it
+			serverBaseURL: "http://gitea.com",
 			want: &remoteAction{
 				URL:  "http://gitea.com",
 				Org:  "actions",
@@ -696,10 +703,59 @@ func Test_newRemoteAction(t *testing.T) {
 			},
 			wantCloneURL: "http://gitea.com/actions/aws",
 		},
+		{
+			action:        "actions/heroku@main",
+			serverBaseURL: "https://gitea.com",
+			want: &remoteAction{
+				URL:  "", // Strange case but the github.com domain name is added after
+				Org:  "actions",
+				Repo: "heroku",
+				Path: "",
+				Ref:  "main",
+			},
+			wantCloneURL: "https://github.com/actions/heroku",
+		},
+		{
+			action:        "http://gitea.com/subdir/actions/aws/ec2@main",
+			serverBaseURL: "http://gitea.com/subdir",
+			want: &remoteAction{
+				URL:  "http://gitea.com/subdir",
+				Org:  "actions",
+				Repo: "aws",
+				Path: "ec2",
+				Ref:  "main",
+			},
+			wantCloneURL: "http://gitea.com/subdir/actions/aws",
+		},
+		{
+			action:        "http://another-gitea-instance.com/actions/aws/ec2@main",
+			serverBaseURL: "http://gitea.com",
+			want: &remoteAction{
+				URL:  "http://another-gitea-instance.com",
+				Org:  "actions",
+				Repo: "aws",
+				Path: "ec2",
+				Ref:  "main",
+			},
+			wantCloneURL: "http://another-gitea-instance.com/actions/aws",
+		},
+		// Problematic case, subdir could not be distinguished of path, it then gives bad clone url
+		{
+			action:        "http://another-gitea-instance.com/subdir/actions/aws/ec2@main",
+			serverBaseURL: "http://gitea.com",
+			want: &remoteAction{
+				URL:  "http://another-gitea-instance.com",
+				Org:  "subdir",
+				Repo: "actions",
+				Path: "aws/ec2",
+				Ref:  "main",
+			},
+			wantCloneURL: "http://another-gitea-instance.com/subdir/actions",
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.action, func(t *testing.T) {
-			got := newRemoteAction(tt.action)
+			got := newRemoteAction(tt.serverBaseURL, tt.action)
 			assert.Equalf(t, tt.want, got, "newRemoteAction(%v)", tt.action)
 			cloneURL := ""
 			if got != nil {

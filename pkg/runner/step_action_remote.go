@@ -48,7 +48,8 @@ func (sar *stepActionRemote) prepareActionExecutor() common.Executor {
 		// so we need to interpolate the expression value for uses first.
 		sar.Step.Uses = sar.RunContext.NewExpressionEvaluator(ctx).Interpolate(ctx, sar.Step.Uses)
 
-		sar.remoteAction = newRemoteAction(sar.Step.Uses)
+		ghc := sar.getGithubContext(ctx)
+		sar.remoteAction = newRemoteAction(ghc.ServerURL, sar.Step.Uses)
 		if sar.remoteAction == nil {
 			return fmt.Errorf("Expected format {org}/{repo}[/path]@ref. Actual '%s' Input string was not in a correct format", sar.Step.Uses)
 		}
@@ -284,6 +285,8 @@ type remoteAction struct {
 	Ref  string
 }
 
+var HttpPrefix = []string{"https://", "http://"}
+
 func (ra *remoteAction) CloneURL(u string) string {
 	if ra.URL == "" {
 		if !strings.HasPrefix(u, "http://") && !strings.HasPrefix(u, "https://") {
@@ -303,20 +306,37 @@ func (ra *remoteAction) IsCheckout() bool {
 	return false
 }
 
-func newRemoteAction(action string) *remoteAction {
+func newRemoteAction(serverBaseURL string, action string) *remoteAction {
 	// support http(s)://host/owner/repo@v3
-	for _, schema := range []string{"https://", "http://"} {
-		if strings.HasPrefix(action, schema) {
-			splits := strings.SplitN(strings.TrimPrefix(action, schema), "/", 2)
-			if len(splits) != 2 {
-				return nil
+	for _, schema := range HttpPrefix {
+		isHttpActions := strings.HasPrefix(action, schema)
+		if isHttpActions {
+			var parsedAction *remoteAction
+
+			isSelfHostedAction := strings.HasPrefix(action, serverBaseURL)
+			if isSelfHostedAction {
+				actionWithoutBaseURL := strings.TrimPrefix(action, serverBaseURL)
+				actionWithoutBaseURL = strings.TrimPrefix(actionWithoutBaseURL, "/") // remove eventual ending slash not contained in base URL
+
+				parsedAction = parseAction(actionWithoutBaseURL)
+				if parsedAction == nil {
+					return nil
+				}
+				parsedAction.URL = serverBaseURL
+			} else {
+				actionWithoutHttp := strings.TrimPrefix(action, schema)
+				splits := strings.SplitN(actionWithoutHttp, "/", 2)
+				if len(splits) != 2 {
+					return nil
+				}
+				parsedAction = parseAction(splits[1])
+				if parsedAction == nil {
+					return nil
+				}
+				parsedAction.URL = schema + splits[0]
 			}
-			ret := parseAction(splits[1])
-			if ret == nil {
-				return nil
-			}
-			ret.URL = schema + splits[0]
-			return ret
+
+			return parsedAction
 		}
 	}
 
