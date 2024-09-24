@@ -718,7 +718,8 @@ func (s *Step) Type() StepType {
 	return StepTypeUsesActionRemote
 }
 
-// UsesHash returns a hash of the uses string
+// UsesHash returns a hash of the uses string.
+// For Gitea.
 func (s *Step) UsesHash() string {
 	return fmt.Sprintf("%x", sha256.Sum256([]byte(s.Uses)))
 }
