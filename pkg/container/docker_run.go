@@ -516,6 +516,11 @@ func (cr *containerReference) create(capAdd []string, capDrop []string) common.E
 				},
 			}
 		}
+		if n.IsContainer() {
+			hostConfig.DNS = []string{}
+			hostConfig.DNSSearch = []string{}
+			hostConfig.DNSOptions = []string{}
+		}
 
 		resp, err := cr.cli.ContainerCreate(ctx, config, hostConfig, networkingConfig, platSpecs, input.Name)
 		if err != nil {
