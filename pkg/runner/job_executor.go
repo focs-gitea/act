@@ -235,8 +235,6 @@ func useStepLogger(rc *RunContext, stepModel *model.Step, stage stepStage, execu
 
 // For Gitea
 func setReusedWorkflowJobResult(ctx context.Context, rc *RunContext, jobResult string) {
-	logger := common.Logger(ctx)
-
 	rc.caller.updateResultLock.Lock()
 	rc.caller.reusedWorkflowJobResults[rc.JobName] = jobResult
 
@@ -260,7 +258,8 @@ func setReusedWorkflowJobResult(ctx context.Context, rc *RunContext, jobResult s
 			reusedWorkflowJobResultMessage = "failed"
 		}
 		rc.caller.runContext.result(reusedWorkflowJobResult)
-		logger.WithField("jobResult", reusedWorkflowJobResult).Infof("\U0001F3C1  Job %s", reusedWorkflowJobResultMessage)
+		// TODO: Set job result for reusable workflow
+		_ = reusedWorkflowJobResultMessage
 	}
 
 	rc.caller.updateResultLock.Unlock()
