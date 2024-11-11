@@ -235,32 +235,5 @@ func useStepLogger(rc *RunContext, stepModel *model.Step, stage stepStage, execu
 
 // For Gitea
 func setReusedWorkflowJobResult(ctx context.Context, rc *RunContext, jobResult string) {
-	rc.caller.updateResultLock.Lock()
-	rc.caller.reusedWorkflowJobResults[rc.JobName] = jobResult
-
-	allJobDone := true
-	hasFailure := false
-	for _, result := range rc.caller.reusedWorkflowJobResults {
-		if result == "pending" {
-			allJobDone = false
-			break
-		}
-		if result == "failure" {
-			hasFailure = true
-		}
-	}
-
-	if allJobDone {
-		reusedWorkflowJobResult := "success"
-		reusedWorkflowJobResultMessage := "succeeded"
-		if hasFailure {
-			reusedWorkflowJobResult = "failure"
-			reusedWorkflowJobResultMessage = "failed"
-		}
-		rc.caller.runContext.result(reusedWorkflowJobResult)
-		// TODO: Set job result for reusable workflow
-		_ = reusedWorkflowJobResultMessage
-	}
-
-	rc.caller.updateResultLock.Unlock()
+	rc.caller.setReusedWorkflowJobResult(rc.JobName, jobResult)
 }

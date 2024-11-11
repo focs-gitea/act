@@ -650,10 +650,6 @@ func (rc *RunContext) Executor() (common.Executor, error) {
 		return nil, err
 	}
 
-	if rc.caller != nil { // For Gitea
-		rc.caller.reusedWorkflowJobResults[rc.JobName] = "pending"
-	}
-
 	return func(ctx context.Context) error {
 		res, err := rc.isEnabled(ctx)
 		if err != nil {

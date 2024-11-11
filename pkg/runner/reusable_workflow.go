@@ -174,8 +174,49 @@ func newReusableWorkflowExecutor(rc *RunContext, directory string, workflow stri
 		if err != nil {
 			return err
 		}
+		runnerImpl := runner.(*runnerImpl)
 
-		return runner.NewPlanExecutor(plan)(ctx)
+		// return runner.NewPlanExecutor(plan)(ctx)
+		return common.NewPipelineExecutor(
+			runner.NewPlanExecutor(plan),
+			setReusedWorkflowCallerResult(rc, runnerImpl.caller),
+		)(ctx)
+	}
+}
+
+func setReusedWorkflowCallerResult(rc *RunContext, caller *caller) common.Executor {
+	return func(ctx context.Context) error {
+		logger := common.Logger(ctx)
+
+		allJobDone := true
+		hasFailure := false
+		for _, result := range caller.reusedWorkflowJobResults {
+			if result == "pending" {
+				allJobDone = false
+				break
+			}
+			if result == "failure" {
+				hasFailure = true
+			}
+		}
+
+		if allJobDone {
+			reusedWorkflowJobResult := "success"
+			reusedWorkflowJobResultMessage := "succeeded"
+			if hasFailure {
+				reusedWorkflowJobResult = "failure"
+				reusedWorkflowJobResultMessage = "failed"
+			}
+
+			if rc.caller != nil {
+				rc.caller.setReusedWorkflowJobResult(rc.JobName, reusedWorkflowJobResult)
+			} else {
+				rc.result(reusedWorkflowJobResult)
+				logger.WithField("jobResult", reusedWorkflowJobResult).Infof("\U0001F3C1  Job %s", reusedWorkflowJobResultMessage)
+			}
+		}
+
+		return nil
 	}
 }
 

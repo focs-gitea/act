@@ -92,6 +92,12 @@ type caller struct {
 	reusedWorkflowJobResults map[string]string // For Gitea
 }
 
+func (c *caller) setReusedWorkflowJobResult(jobName string, result string) {
+	c.updateResultLock.Lock()
+	defer c.updateResultLock.Unlock()
+	c.reusedWorkflowJobResults[jobName] = result
+}
+
 type runnerImpl struct {
 	config    *Config
 	eventJSON string
@@ -209,6 +215,9 @@ func (runner *runnerImpl) NewPlanExecutor(plan *model.Plan) common.Executor {
 					}
 					if len(rc.String()) > maxJobNameLen {
 						maxJobNameLen = len(rc.String())
+					}
+					if rc.caller != nil { // For Gitea
+						rc.caller.reusedWorkflowJobResults[rc.JobName] = "pending"
 					}
 					stageExecutor = append(stageExecutor, func(ctx context.Context) error {
 						jobName := fmt.Sprintf("%-*s", maxJobNameLen, rc.String())
