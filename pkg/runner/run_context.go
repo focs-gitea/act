@@ -92,7 +92,12 @@ func (rc *RunContext) GetEnv() map[string]string {
 }
 
 func (rc *RunContext) jobContainerName() string {
-	return createSimpleContainerName(rc.Config.ContainerNamePrefix, "WORKFLOW-"+rc.Run.Workflow.Name, "JOB-"+rc.Name)
+	nameParts := []string{rc.Config.ContainerNamePrefix, "WORKFLOW-" + rc.Run.Workflow.Name, "JOB-" + rc.Name}
+	if rc.caller != nil {
+		nameParts = append(nameParts, "CALLED-BY-"+rc.caller.runContext.JobName)
+	}
+	// return createSimpleContainerName(rc.Config.ContainerNamePrefix, "WORKFLOW-"+rc.Run.Workflow.Name, "JOB-"+rc.Name)
+	return createSimpleContainerName(nameParts...) // For Gitea
 }
 
 // Deprecated: use `networkNameForGitea`
