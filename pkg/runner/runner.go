@@ -92,12 +92,6 @@ type caller struct {
 	reusedWorkflowJobResults map[string]string // For Gitea
 }
 
-func (c *caller) setReusedWorkflowJobResult(jobName string, result string) {
-	c.updateResultLock.Lock()
-	defer c.updateResultLock.Unlock()
-	c.reusedWorkflowJobResults[jobName] = result
-}
-
 type runnerImpl struct {
 	config    *Config
 	eventJSON string
@@ -289,4 +283,11 @@ func (runner *runnerImpl) newRunContext(ctx context.Context, run *model.Run, mat
 	rc.Name = rc.ExprEval.Interpolate(ctx, run.String())
 
 	return rc
+}
+
+// For Gitea
+func (c *caller) setReusedWorkflowJobResult(jobName string, result string) {
+	c.updateResultLock.Lock()
+	defer c.updateResultLock.Unlock()
+	c.reusedWorkflowJobResults[jobName] = result
 }

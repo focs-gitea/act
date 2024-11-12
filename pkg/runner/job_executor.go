@@ -185,7 +185,7 @@ func setJobResult(ctx context.Context, info jobInfo, rc *RunContext, success boo
 	info.result(jobResult)
 	if rc.caller != nil {
 		// set reusable workflow job result
-		setReusedWorkflowJobResult(ctx, rc, jobResult)
+		rc.caller.setReusedWorkflowJobResult(rc.JobName, jobResult) // For Gitea
 		return
 	}
 
@@ -231,9 +231,4 @@ func useStepLogger(rc *RunContext, stepModel *model.Step, stage stepStage, execu
 
 		return executor(ctx)
 	}
-}
-
-// For Gitea
-func setReusedWorkflowJobResult(ctx context.Context, rc *RunContext, jobResult string) {
-	rc.caller.setReusedWorkflowJobResult(rc.JobName, jobResult)
 }

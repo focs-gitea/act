@@ -174,19 +174,24 @@ func newReusableWorkflowExecutor(rc *RunContext, directory string, workflow stri
 		if err != nil {
 			return err
 		}
-		runnerImpl := runner.(*runnerImpl)
 
 		// return runner.NewPlanExecutor(plan)(ctx)
 		return common.NewPipelineExecutor(
 			runner.NewPlanExecutor(plan),
-			setReusedWorkflowCallerResult(rc, runnerImpl.caller),
+			setReusedWorkflowCallerResult(rc, runner),
 		)(ctx)
 	}
 }
 
-func setReusedWorkflowCallerResult(rc *RunContext, caller *caller) common.Executor {
+func setReusedWorkflowCallerResult(rc *RunContext, runner Runner) common.Executor {
 	return func(ctx context.Context) error {
 		logger := common.Logger(ctx)
+
+		runnerImpl, ok := runner.(*runnerImpl)
+		if !ok {
+			logger.Warn("Failed to get caller from runner")
+		}
+		caller := runnerImpl.caller
 
 		allJobDone := true
 		hasFailure := false

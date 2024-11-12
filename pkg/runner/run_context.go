@@ -653,7 +653,7 @@ func (rc *RunContext) Executor() (common.Executor, error) {
 	return func(ctx context.Context) error {
 		res, err := rc.isEnabled(ctx)
 		if err != nil {
-			setReusedWorkflowJobResult(ctx, rc, "failure") // For Gitea
+			rc.caller.setReusedWorkflowJobResult(rc.JobName, "failure") // For Gitea
 			return err
 		}
 		if res {
@@ -750,7 +750,7 @@ func (rc *RunContext) isEnabled(ctx context.Context) (bool, error) {
 
 	if !runJob {
 		if rc.caller != nil { // For Gitea
-			setReusedWorkflowJobResult(ctx, rc, "skipped")
+			rc.caller.setReusedWorkflowJobResult(rc.JobName, "skipped")
 			return false, nil
 		}
 		l.WithField("jobResult", "skipped").Debugf("Skipping job '%s' due to '%s'", job.Name, job.If.Value)
