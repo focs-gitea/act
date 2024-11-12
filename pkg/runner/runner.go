@@ -211,7 +211,7 @@ func (runner *runnerImpl) NewPlanExecutor(plan *model.Plan) common.Executor {
 						maxJobNameLen = len(rc.String())
 					}
 					if rc.caller != nil { // For Gitea
-						rc.caller.reusedWorkflowJobResults[rc.JobName] = "pending"
+						rc.caller.setReusedWorkflowJobResult(rc.JobName, "pending")
 					}
 					stageExecutor = append(stageExecutor, func(ctx context.Context) error {
 						jobName := fmt.Sprintf("%-*s", maxJobNameLen, rc.String())
