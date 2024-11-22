@@ -122,7 +122,8 @@ func (sar *stepActionRemote) prepareActionExecutor() common.Executor {
 			*/
 			OfflineMode: sar.RunContext.Config.ActionOfflineMode,
 
-			InsecureSkipTLS: sar.cloneSkipTLS(), // For Gitea
+			InsecureSkipTLS: sar.cloneSkipTLS(),                    // For Gitea
+			RetryToken:      sar.getRunContext().Config.GetToken(), // For Gitea
 		})
 		var ntErr common.Executor
 		if err := gitClone(ctx); err != nil {

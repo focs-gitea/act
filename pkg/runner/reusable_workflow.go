@@ -46,7 +46,7 @@ func newLocalReusableWorkflowExecutor(rc *RunContext) common.Executor {
 	token := rc.Config.GetToken()
 
 	return common.NewPipelineExecutor(
-		newMutexExecutor(cloneIfRequired(rc, *remoteReusableWorkflow, workflowDir, token)),
+		newMutexExecutor(cloneIfRequired(rc, *remoteReusableWorkflow, workflowDir, token, "")),
 		newReusableWorkflowExecutor(rc, workflowDir, remoteReusableWorkflow.FilePath()),
 	)
 }
@@ -77,11 +77,8 @@ func newRemoteReusableWorkflowExecutor(rc *RunContext) common.Executor {
 		return newActionCacheReusableWorkflowExecutor(rc, filename, remoteReusableWorkflow)
 	}
 
-	// FIXME: if the reusable workflow is from a private repository, we need to provide a token to access the repository.
-	token := ""
-
 	return common.NewPipelineExecutor(
-		newMutexExecutor(cloneIfRequired(rc, *remoteReusableWorkflow, workflowDir, token)),
+		newMutexExecutor(cloneIfRequired(rc, *remoteReusableWorkflow, workflowDir, "", rc.Config.GetToken())),
 		newReusableWorkflowExecutor(rc, workflowDir, remoteReusableWorkflow.FilePath()),
 	)
 }
@@ -134,7 +131,7 @@ func newMutexExecutor(executor common.Executor) common.Executor {
 	}
 }
 
-func cloneIfRequired(rc *RunContext, remoteReusableWorkflow remoteReusableWorkflow, targetDirectory, token string) common.Executor {
+func cloneIfRequired(rc *RunContext, remoteReusableWorkflow remoteReusableWorkflow, targetDirectory, token, retryToken string) common.Executor {
 	return common.NewConditionalExecutor(
 		func(ctx context.Context) bool {
 			_, err := os.Stat(targetDirectory)
@@ -152,6 +149,8 @@ func cloneIfRequired(rc *RunContext, remoteReusableWorkflow remoteReusableWorkfl
 				Dir:         targetDirectory,
 				Token:       token,
 				OfflineMode: rc.Config.ActionOfflineMode,
+
+				RetryToken: retryToken, // For Gitea
 			})(ctx)
 		},
 		nil,

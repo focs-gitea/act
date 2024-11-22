@@ -15,6 +15,7 @@ import (
 	"github.com/go-git/go-git/v5/config"
 	"github.com/go-git/go-git/v5/plumbing"
 	"github.com/go-git/go-git/v5/plumbing/storer"
+	"github.com/go-git/go-git/v5/plumbing/transport"
 	"github.com/go-git/go-git/v5/plumbing/transport/http"
 	"github.com/mattn/go-isatty"
 	log "github.com/sirupsen/logrus"
@@ -229,6 +230,7 @@ type NewGitCloneExecutorInput struct {
 
 	// For Gitea
 	InsecureSkipTLS bool
+	RetryToken      string
 }
 
 // CloneIfRequired ...
@@ -305,7 +307,16 @@ func NewGitCloneExecutor(input NewGitCloneExecutorInput) common.Executor {
 		refName := plumbing.ReferenceName(fmt.Sprintf("refs/heads/%s", input.Ref))
 		r, err := CloneIfRequired(ctx, refName, input, logger)
 		if err != nil {
-			return err
+			if errors.Is(err, transport.ErrAuthenticationRequired) && input.Token == "" && input.RetryToken != "" {
+				input.Token = input.RetryToken
+				input.RetryToken = ""
+				r, err = CloneIfRequired(ctx, refName, input, logger)
+				if err != nil {
+					return err
+				}
+			} else {
+				return err
+			}
 		}
 
 		isOfflineMode := input.OfflineMode
