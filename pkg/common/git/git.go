@@ -332,7 +332,14 @@ func NewGitCloneExecutor(input NewGitCloneExecutorInput) common.Executor {
 		if !isOfflineMode {
 			err = r.Fetch(&fetchOptions)
 			if err != nil && !errors.Is(err, git.NoErrAlreadyUpToDate) {
-				return err
+				if errors.Is(err, transport.ErrAuthenticationRequired) && input.Token == "" && input.RetryToken != "" {
+					fetchOptions, _ = gitOptions(input.RetryToken)
+					if err = r.Fetch(&fetchOptions); err != nil && !errors.Is(err, git.NoErrAlreadyUpToDate) {
+						return err
+					}
+				} else {
+					return err
+				}
 			}
 		}
 
@@ -395,7 +402,14 @@ func NewGitCloneExecutor(input NewGitCloneExecutorInput) common.Executor {
 		}
 		if !isOfflineMode {
 			if err = w.Pull(&pullOptions); err != nil && err != git.NoErrAlreadyUpToDate {
-				logger.Debugf("Unable to pull %s: %v", refName, err)
+				if errors.Is(err, transport.ErrAuthenticationRequired) && input.Token == "" && input.RetryToken != "" {
+					_, pullOptions = gitOptions(input.RetryToken)
+					if err = w.Pull(&pullOptions); err != nil && !errors.Is(err, git.NoErrAlreadyUpToDate) {
+						logger.Debugf("Unable to pull %s: %v", refName, err)
+					}
+				} else {
+					logger.Debugf("Unable to pull %s: %v", refName, err)
+				}
 			}
 		}
 		logger.Debugf("Cloned %s to %s", input.URL, input.Dir)
