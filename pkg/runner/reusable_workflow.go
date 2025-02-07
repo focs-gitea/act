@@ -52,7 +52,13 @@ func newLocalReusableWorkflowExecutor(rc *RunContext) common.Executor {
 }
 
 func newRemoteReusableWorkflowExecutor(rc *RunContext) common.Executor {
-	uses := rc.Run.Job().Uses
+
+	// Interpolate any secrets into the uses string
+	secretCtx := context.TODO()
+	for key, value := range rc.Config.Secrets {
+		secretCtx = context.WithValue(secretCtx, key, value)
+	}
+	uses := rc.NewExpressionEvaluator(secretCtx).Interpolate(secretCtx, rc.Run.Job().Uses)
 
 	var remoteReusableWorkflow *remoteReusableWorkflow
 	if strings.HasPrefix(uses, "http://") || strings.HasPrefix(uses, "https://") {
