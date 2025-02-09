@@ -288,13 +288,14 @@ func (j *Job) Container() *ContainerSpec {
 		if !decodeNode(j.RawContainer, &val.Image) {
 			return nil
 		}
+		val.Image = ""
 	case yaml.MappingNode:
 		val = new(ContainerSpec)
 		if !decodeNode(j.RawContainer, val) {
 			return nil
 		}
+		val.Image = ""
 	}
-	val.Image = ""
 	return val
 }
 
