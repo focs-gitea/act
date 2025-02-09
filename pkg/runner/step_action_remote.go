@@ -304,18 +304,30 @@ func (ra *remoteAction) IsCheckout() bool {
 }
 
 func newRemoteAction(action string) *remoteAction {
-	// support http(s)://host/owner/repo@v3
+	// support http(s)://host/owner/repo@v3 and http(s)://host/git/owner/repo@v3
 	for _, schema := range []string{"https://", "http://"} {
 		if strings.HasPrefix(action, schema) {
-			splits := strings.SplitN(strings.TrimPrefix(action, schema), "/", 2)
+			trimmed := strings.TrimPrefix(action, schema)
+			splits := strings.SplitN(trimmed, "/", 2)
 			if len(splits) != 2 {
 				return nil
 			}
-			ret := parseAction(splits[1])
+			host, path := splits[0], splits[1]
+
+			var baseURL, actionPath string
+			if strings.HasPrefix(path, "git/") {
+				actionPath = strings.TrimPrefix(path, "git/")
+				baseURL = fmt.Sprintf("%s%s/git", schema, host)
+			} else {
+				actionPath = path
+				baseURL = fmt.Sprintf("%s%s", schema, host)
+			}
+
+			ret := parseAction(actionPath)
 			if ret == nil {
 				return nil
 			}
-			ret.URL = schema + splits[0]
+			ret.URL = baseURL
 			return ret
 		}
 	}
