@@ -294,6 +294,7 @@ func (j *Job) Container() *ContainerSpec {
 			return nil
 		}
 	}
+	val.Image = ""
 	return val
 }
 
