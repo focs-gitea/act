@@ -109,17 +109,15 @@ func (sar *stepActionRemote) prepareActionExecutor() common.Executor {
 		}
 
 		actionDir := fmt.Sprintf("%s/%s", sar.RunContext.ActionCacheDir(), sar.Step.UsesHash())
+		cloneToken := ""
+		if github != nil && sar.isSameInstance(github.ServerURL) {
+			cloneToken = github.Token
+		}
 		gitClone := stepActionRemoteNewCloneExecutor(git.NewGitCloneExecutorInput{
 			URL:   sar.remoteAction.CloneURL(sar.RunContext.Config.DefaultActionInstance),
 			Ref:   sar.remoteAction.Ref,
 			Dir:   actionDir,
-			Token: "", /*
-				Shouldn't provide token when cloning actions,
-				the token comes from the instance which triggered the task,
-				however, it might be not the same instance which provides actions.
-				For GitHub, they are the same, always github.com.
-				But for Gitea, tasks triggered by a.com can clone actions from b.com.
-			*/
+			Token: cloneToken,
 			OfflineMode: sar.RunContext.Config.ActionOfflineMode,
 
 			InsecureSkipTLS: sar.cloneSkipTLS(), // For Gitea
@@ -260,6 +258,35 @@ func (sar *stepActionRemote) getCompositeSteps() *compositeSteps {
 	return sar.compositeSteps
 }
 
+func normalizeActionURL(u string) string {
+	u = strings.TrimSpace(u)
+	u = strings.TrimSuffix(u, "/")
+	u = strings.TrimPrefix(u, "https://")
+	u = strings.TrimPrefix(u, "http://")
+	return strings.ToLower(u)
+}
+
+func (sar *stepActionRemote) isSameInstance(serverURL string) bool {
+	targetURL := sar.remoteAction.URL
+	if targetURL == "" {
+		targetURL = sar.RunContext.Config.DefaultActionInstance
+	}
+	if targetURL == "self" {
+		return true
+	}
+	normTarget := normalizeActionURL(targetURL)
+	if normTarget == "" {
+		return false
+	}
+	if normTarget == normalizeActionURL(sar.RunContext.Config.GitHubInstance) {
+		return true
+	}
+	if serverURL != "" && normTarget == normalizeActionURL(serverURL) {
+		return true
+	}
+	return false
+}
+
 // For Gitea
 // cloneSkipTLS returns true if the runner can clone an action from the Gitea instance
 func (sar *stepActionRemote) cloneSkipTLS() bool {
@@ -267,13 +294,7 @@ func (sar *stepActionRemote) cloneSkipTLS() bool {
 		// Return false if the Gitea instance is not an insecure instance
 		return false
 	}
-	if sar.remoteAction.URL == "" {
-		// Empty URL means the default action instance should be used
-		// Return true if the URL of the Gitea instance is the same as the URL of the default action instance
-		return sar.RunContext.Config.DefaultActionInstance == sar.RunContext.Config.GitHubInstance
-	}
-	// Return true if the URL of the remote action is the same as the URL of the Gitea instance
-	return sar.remoteAction.URL == sar.RunContext.Config.GitHubInstance
+	return sar.isSameInstance("")
 }
 
 type remoteAction struct {
