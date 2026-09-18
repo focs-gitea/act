@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net/url"
 	"os"
 	"path"
 	"path/filepath"
@@ -258,6 +259,21 @@ func (sar *stepActionRemote) getCompositeSteps() *compositeSteps {
 	return sar.compositeSteps
 }
 
+func extractHost(rawURL string) string {
+	rawURL = strings.TrimSpace(rawURL)
+	if rawURL == "" {
+		return ""
+	}
+	if !strings.Contains(rawURL, "://") {
+		rawURL = "https://" + rawURL
+	}
+	u, err := url.Parse(rawURL)
+	if err != nil {
+		return ""
+	}
+	return strings.ToLower(u.Hostname())
+}
+
 func normalizeActionURL(u string) string {
 	u = strings.TrimSpace(u)
 	u = strings.TrimSuffix(u, "/")
@@ -271,19 +287,74 @@ func (sar *stepActionRemote) isSameInstance(serverURL string) bool {
 	if targetURL == "" {
 		targetURL = sar.RunContext.Config.DefaultActionInstance
 	}
-	if targetURL == "self" {
+	if targetURL == "self" || targetURL == "" {
 		return true
 	}
-	normTarget := normalizeActionURL(targetURL)
-	if normTarget == "" {
+
+	targetHost := extractHost(targetURL)
+	if targetHost == "" {
 		return false
 	}
-	if normTarget == normalizeActionURL(sar.RunContext.Config.GitHubInstance) {
+	// Never inject Gitea task token when cloning from github.com
+	if targetHost == "github.com" {
+		return false
+	}
+
+	// 1. If uses: org/repo@ref without an explicit URL prefix,
+	// and DefaultActionInstance is not github.com, it is always the self-hosted Gitea instance.
+	if sar.remoteAction.URL == "" {
 		return true
 	}
-	if serverURL != "" && normTarget == normalizeActionURL(serverURL) {
+
+	// 2. Check if targetHost matches GitHubInstance host
+	if ghHost := extractHost(sar.RunContext.Config.GitHubInstance); ghHost != "" && targetHost == ghHost {
 		return true
 	}
+
+	// 3. Check if targetHost matches serverURL host
+	if srvHost := extractHost(serverURL); srvHost != "" && targetHost == srvHost {
+		return true
+	}
+
+	// 4. Check if targetHost matches DefaultActionInstance host
+	if defHost := extractHost(sar.RunContext.Config.DefaultActionInstance); defHost != "" && defHost != "github.com" && targetHost == defHost {
+		return true
+	}
+
+	// 5. Check PresetGitHubContext if available
+	if preset := sar.RunContext.Config.PresetGitHubContext; preset != nil {
+		if pHost := extractHost(preset.ServerURL); pHost != "" && targetHost == pHost {
+			return true
+		}
+	}
+
+	// 6. Check common organizational domain suffix (e.g. *.sjtu.edu.cn)
+	if strings.HasSuffix(targetHost, ".sjtu.edu.cn") {
+		checkSjtu := func(u string) bool {
+			h := extractHost(u)
+			return strings.HasSuffix(h, ".sjtu.edu.cn")
+		}
+		if checkSjtu(sar.RunContext.Config.GitHubInstance) ||
+			checkSjtu(serverURL) ||
+			checkSjtu(sar.RunContext.Config.DefaultActionInstance) {
+			return true
+		}
+		if preset := sar.RunContext.Config.PresetGitHubContext; preset != nil && checkSjtu(preset.ServerURL) {
+			return true
+		}
+	}
+
+	// 7. Fallback to normalized action URL check
+	normTarget := normalizeActionURL(targetURL)
+	if normTarget != "" {
+		if normTarget == normalizeActionURL(sar.RunContext.Config.GitHubInstance) {
+			return true
+		}
+		if serverURL != "" && normTarget == normalizeActionURL(serverURL) {
+			return true
+		}
+	}
+
 	return false
 }
 
