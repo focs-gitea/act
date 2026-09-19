@@ -111,8 +111,18 @@ func (sar *stepActionRemote) prepareActionExecutor() common.Executor {
 
 		actionDir := fmt.Sprintf("%s/%s", sar.RunContext.ActionCacheDir(), sar.Step.UsesHash())
 		cloneToken := ""
-		if github != nil && sar.isSameInstance(github.ServerURL) {
+		sameInstance := github != nil && sar.isSameInstance(github.ServerURL)
+		if sameInstance {
 			cloneToken = github.Token
+		}
+		{
+			serverURL := ""
+			if github != nil {
+				serverURL = github.ServerURL
+			}
+			common.Logger(ctx).Infof("[focs-debug] action=%q sameInstance=%v tokenLen=%d authTokenIsEmpty=%v serverURL=%q defaultActionInstance=%q remoteActionURL=%q",
+				sar.Step.Uses, sameInstance, len(cloneToken), cloneToken == "", serverURL,
+				sar.RunContext.Config.DefaultActionInstance, sar.remoteAction.URL)
 		}
 		gitClone := stepActionRemoteNewCloneExecutor(git.NewGitCloneExecutorInput{
 			URL:   sar.remoteAction.CloneURL(sar.RunContext.Config.DefaultActionInstance),
